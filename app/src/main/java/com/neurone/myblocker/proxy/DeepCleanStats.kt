@@ -21,10 +21,14 @@ object DeepCleanStats {
     /** QUIC (UDP/443) datagrams dropped to force interceptable TCP. */
     @Volatile var quicDropped: Long = 0
 
+    /** Browser TLS handshakes that failed, almost always because the certificate is not installed. */
+    @Volatile var handshakeFailures: Long = 0
+
     fun reset() {
         connections = 0
         pagesTidied = 0
         passthroughs = 0
         quicDropped = 0
+        handshakeFailures = 0
     }
 }

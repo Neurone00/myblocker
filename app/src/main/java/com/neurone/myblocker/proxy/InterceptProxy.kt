@@ -119,7 +119,14 @@ class InterceptProxy(
                 val params = ssl.sslParameters
                 params.applicationProtocols = arrayOf("http/1.1")
                 ssl.sslParameters = params
-                ssl.startHandshake()
+                try {
+                    ssl.startHandshake()
+                } catch (e: Exception) {
+                    // The browser refused our certificate (not installed / not trusted) or dropped the
+                    // handshake; counted so the status screen can say so instead of silently showing 0 pages.
+                    if (!internal) { handshakeFailures++; DeepCleanStats.handshakeFailures = handshakeFailures }
+                    throw e
+                }
                 if (internal) serveInternal(ssl) else relayHttp(ssl.getInputStream(), ssl.getOutputStream(), ssl, host, target, tls = true)
             } else {
                 relayHttp(cin, client.getOutputStream(), client, ip(target.dst), target, tls = false)
@@ -138,6 +145,7 @@ class InterceptProxy(
     /** Extra hostnames (and their subdomains) the user chose to leave untouched. */
     @Volatile var userExcluded: Set<String> = emptySet()
     @Volatile var passthroughs: Long = 0; private set
+    @Volatile var handshakeFailures: Long = 0; private set
 
     /** True when [host] should be tunnelled raw rather than intercepted. Matches the host and its parents. */
     fun isExcluded(host: String): Boolean {
@@ -447,7 +455,20 @@ class InterceptProxy(
         System.arraycopy(html, 0, out, 0, at)
         System.arraycopy(snippet, 0, out, at, snippet.size)
         System.arraycopy(html, at, out, at + snippet.size, html.size - at)
-        return out
+        return if (lower.contains("content-security-policy")) adjustMetaCsp(out, nonce) else out
+    }
+
+    /** A CSP delivered as <meta http-equiv> gets the same nonce/origin additions as the header. */
+    private fun adjustMetaCsp(html: ByteArray, nonce: String): ByteArray {
+        val text = String(html, Charsets.ISO_8859_1) // byte-preserving
+        val meta = Regex("(?is)<meta\\b[^>]*>")
+        val attr = Regex("(?is)(\\bcontent\\s*=\\s*)([\"'])(.*?)\\2")
+        val fixed = meta.replace(text) { m ->
+            val tag = m.value
+            if (!Regex("(?is)http-equiv\\s*=\\s*[\"']?content-security-policy").containsMatchIn(tag)) tag
+            else attr.replace(tag) { a -> a.groupValues[1] + a.groupValues[2] + adjustCsp(a.groupValues[3], nonce) + a.groupValues[2] }
+        }
+        return if (fixed === text || fixed == text) html else fixed.toByteArray(Charsets.ISO_8859_1)
     }
 
     /**
@@ -511,7 +532,9 @@ class InterceptProxy(
             val path = req.startLine.split(' ').getOrNull(1) ?: "/"
             val clean = path.substringBefore('?')
             val r = rules()
+            val isTest = clean == "/test" || clean == "/test/"
             val css: String? = when {
+                isTest -> testPage()
                 clean == "/g.css" -> r.genericCss
                 clean.startsWith("/s/") && clean.endsWith(".css") -> r.siteCss(clean.removePrefix("/s/").removeSuffix(".css"))
                 else -> null
@@ -521,14 +544,13 @@ class InterceptProxy(
             val status: String
             if (css == null) {
                 status = "404 Not Found"; body = ByteArray(0)
-            } else if (req.get("If-None-Match") == etag) {
+            } else if (!isTest && req.get("If-None-Match") == etag) {
                 status = "304 Not Modified"; body = ByteArray(0)
             } else {
                 status = "200 OK"; body = css.toByteArray(Charsets.UTF_8)
             }
             val head = StringBuilder("HTTP/1.1 $status\r\n")
-                .append("Content-Type: text/css; charset=utf-8\r\n")
-                .append("Cache-Control: public, max-age=86400\r\n")
+                .append(if (isTest) "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n" else "Content-Type: text/css; charset=utf-8\r\nCache-Control: public, max-age=86400\r\n")
                 .append("ETag: $etag\r\n")
                 .append("Access-Control-Allow-Origin: *\r\n")
                 .append("Content-Length: ${body.size}\r\n")
@@ -541,6 +563,29 @@ class InterceptProxy(
     }
 
     private fun ip(b: ByteArray): String = runCatching { InetAddress.getByAddress(b).hostAddress ?: "" }.getOrDefault("")
+
+    /**
+     * Self-test page at https://rules.adbrella.internal/test. Reaching it at all proves the tunnel,
+     * the proxy and the certificate work in that browser; it then shows three placeholders shaped
+     * like the boxes news sites leave behind and reports whether the collapser removed them.
+     */
+    private fun testPage(): String = """
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Adbrella test</title>
+<style>body{font-family:sans-serif;margin:0;padding:20px;background:#f3f4f8;color:#1b1c1f}h1{font-size:22px;margin:0 0 8px}.card{background:#fff;border-radius:16px;padding:16px;margin:0 0 14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.ph{background:#dedede;color:#9a9a9a;text-align:center;font-size:34px;line-height:120px;min-height:120px;margin:10px 0}.ok{color:#1b7f3b;font-weight:600}.bad{color:#b3261e;font-weight:600}small{color:#666}#t3::before{content:"Pubblicità"}</style></head>
+<body><div class="card"><h1>☂ Adbrella can see this browser</h1><p>This page comes from Adbrella itself: the tunnel, the proxy and the certificate all work here.</p></div>
+<div class="card"><p>Three placeholders shaped like the boxes news sites leave behind. They should vanish within a second:</p>
+<div id="t1" class="adv-box ph">ADV</div>
+<div id="t2" class="box-top ph"><ins class="adsbygoogle" style="display:block;height:120px"></ins></div>
+<div id="t3" class="slot-top ph"></div>
+<p id="v">Checking…</p></div>
+<div class="card"><small>Since the tunnel started: browser connections ${connections}, pages tidied ${pagesTidied}, certificate refused by a browser ${handshakeFailures} times.</small></div>
+<script>$COLLAPSER_JS</script>
+<script>setTimeout(function(){var h=function(i){var e=document.getElementById(i);return e&&e.getAttribute('data-adb')?1:0;};var n=h('t1')+h('t2')+h('t3');var v=document.getElementById('v');
+if(n===3){v.textContent='All three removed. Tidying works in this browser; if a site still shows a box, its markup is one the collapser does not recognise yet.';v.className='ok';}
+else{v.textContent='Only '+n+' of 3 removed ('+(h('t1')?'':'label ')+(h('t2')?'':'slot ')+(h('t3')?'':'css-label ')+'left). The script runs but misses that shape.';v.className='bad';}},1500);</script>
+</body></html>
+""".trim()
 
     companion object {
         private const val TAG = "InterceptProxy"
@@ -567,8 +612,12 @@ var W=window,D=document;
 var RE=/(^|[^a-z])(ad|adv|ads|advert|advertis|advertisement|reklam|werbung|publicidad|pubblicit|sponsor|banner|billboard|leaderboard|skyscraper|mpu|dfp|gpt|adslot|adunit|adbox|adwrap|adcontainer|adholder|adzone|adspace|adframe|adcode|adlabel)([^a-z]|${'$'})/i;
 var LABEL=/^[\s\-–—•·.:|()\[\]]*(adv|ads|ad|advert|advertisement|advertising|publicidad|publicit[eé]|pubblicit[aà]|sponsor|sponsored|sponsorizzato|contenuto sponsorizzato|werbung|anzeige|reklama|annuncio|annunci)[\s\-–—•·.:|()\[\]]*${'$'}/i;
 var KEEP=/^(html|body|main|article|header|footer|nav|form|table|tbody|thead|tr|td|th)${'$'}/i;
-var SEL='ins.adsbygoogle,[id^=google_ads_],[id^=div-gpt-ad],[id*=div-gpt-ad],iframe[src*=doubleclick],iframe[src*=googlesyndication],iframe[src*=amazon-adsystem],iframe[src*=adnxs],[data-ad-slot],[data-google-query-id]';
+var SEL='ins.adsbygoogle,[id^=google_ads_],[id^=div-gpt-ad],[id*=div-gpt-ad],iframe[src*=doubleclick],iframe[src*=googlesyndication],iframe[src*=amazon-adsystem],iframe[src*=adnxs],iframe[src*=criteo],iframe[src*=taboola],iframe[src*=outbrain],[data-ad-slot],[data-google-query-id]';
+var ADF=/doubleclick|googlesyndication|adnxs|amazon-adsystem|adsafeprotected|criteo|rubiconproject|pubmatic|openx|taboola|outbrain|adform|smartadserver|teads|seedtag|yieldlab|^about:blank${'$'}/i;
 var MEDIA='img[src],picture,video,audio,canvas,form,input,button,select,textarea,h1,h2,h3,h4,h5,h6,article,p,table';
+function hiddenWithin(x,root){for(var q=x;q&&q!==root;q=q.parentElement){if(q.getAttribute('data-adb'))return true;}return false;}
+/* an embedded player or widget is content; a frame from an ad network is not */
+function realFrame(el,root){var f=el.querySelectorAll('iframe');for(var i=0;i<f.length;i++){var x=f[i],s=x.getAttribute('src')||'';if(!s||ADF.test(s))continue;if(root&&hiddenWithin(x,root))continue;return true;}return false;}
 function cls(el){var c=el.className;return typeof c==='string'?c:(c&&c.baseVal)||'';}
 function adish(el){return RE.test(el.id+' '+cls(el))||el.hasAttribute('data-ad-slot')||el.hasAttribute('data-ad-client')||el.hasAttribute('data-google-query-id')||el.hasAttribute('data-ad')||el.hasAttribute('data-ad-unit')||el.hasAttribute('data-adunit');}
 function norm(s){return (s||'').replace(/\s+/g,' ').trim();}
@@ -578,8 +627,10 @@ function vtxt(el){if(el.nodeType===3)return el.nodeValue||'';if(el.nodeType!==1|
 function pseudo(el){try{var b=W.getComputedStyle(el,'::before').content,a=W.getComputedStyle(el,'::after').content;return norm(((b&&b!=='none'&&b!=='normal')?b:'')+' '+((a&&a!=='none'&&a!=='normal')?a:'')).replace(/["']/g,'');}catch(e){return '';}}
 /* whole visible text is just an ad label ("ADV", "Pubblicità"), literal or CSS-generated on an ad-ish box */
 function labelOnly(el,a){var t=txt(el);if(t.length>24)return false;if(t&&LABEL.test(t))return true;if(!t&&a){var p=pseudo(el);return !!p&&LABEL.test(p);}return false;}
-function hasContent(el){if(el.querySelector(MEDIA))return true;var t=txt(el);return t.length>25&&!LABEL.test(t);}
-function hasVisibleContent(el){var m=el.querySelectorAll(MEDIA);for(var i=0;i<m.length;i++){var x=m[i],h=false;for(var q=x;q&&q!==el;q=q.parentElement){if(q.getAttribute('data-adb')){h=true;break;}}if(!h)return true;}var t=norm(vtxt(el));return t.length>0&&!LABEL.test(t);}
+function hasContent(el){if(el.querySelector(MEDIA)||realFrame(el))return true;var t=txt(el);return t.length>25&&!LABEL.test(t);}
+function hasVisibleContent(el){var m=el.querySelectorAll(MEDIA);for(var i=0;i<m.length;i++){if(!hiddenWithin(m[i],el))return true;}if(realFrame(el,el))return true;var t=norm(vtxt(el));return t.length>0&&!LABEL.test(t);}
+/* a big empty box (reserved ad space) whatever its class; the label may be CSS-generated */
+function tallEmpty(el){if(txt(el)!==''||el.querySelector(MEDIA)||realFrame(el))return false;return el.offsetHeight>=80&&el.offsetWidth>=150;}
 function mark(el,v){try{if(el&&el.style){if(!el.getAttribute('data-adb-d'))el.setAttribute('data-adb-d',el.style.getPropertyValue('display')||'-');el.style.setProperty('display','none','important');el.setAttribute('data-adb',v);}}catch(e){}}
 /* after hiding an ad, collapse the ancestors it leaves empty (the grey reserved box), a few levels up */
 function collapseUp(el){var p=el.parentElement,d=0;while(p&&d++<4){if(KEEP.test(p.tagName)||p.getAttribute('data-adb'))return;if(hasVisibleContent(p))return;var ks=p.children,n=0;for(var i=0;i<ks.length;i++){if(!ks[i].getAttribute('data-adb'))n++;}if(n>6)return;mark(p,'2');p=p.parentElement;}}
@@ -593,7 +644,8 @@ function sweep(){try{
  var d=D.querySelectorAll('div,section,aside,ul,li,figure,ins,span,td');
  for(var j=0;j<d.length;j++){var el=d[j];if(el.getAttribute('data-adb'))continue;var a=adish(el);
   if(labelOnly(el,a)&&!el.querySelector(MEDIA)){hide(el);continue;}
-  if(a&&!hasContent(el))hide(el);}
+  if(a){if(!hasContent(el))hide(el);continue;}
+  if(tallEmpty(el)){var p=pseudo(el);if(p&&LABEL.test(p))hide(el);}}
  restore();
  if(sweeps>600&&mo){try{mo.disconnect();}catch(e){}mo=null;}
 }catch(e){}}

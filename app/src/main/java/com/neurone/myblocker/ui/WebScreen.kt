@@ -1,5 +1,7 @@
 package com.neurone.myblocker.ui
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +44,7 @@ fun WebScreen(nav: Navigator) {
     val pages = remember(tick) { ds.pagesTidied }
     val conns = remember(tick) { ds.connections }
     val quic = remember(tick) { ds.quicDropped }
+    val refused = remember(tick) { ds.handshakeFailures }
     val deepClean = remember(changes) { prefs.deepClean }
 
     Page(title = "Tidy web pages", onBack = nav.pop) {
@@ -60,14 +63,34 @@ fun WebScreen(nav: Navigator) {
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp),
                 )
-                if (intercepting && pages == 0L) {
+                if (refused > 0L) {
+                    Text(
+                        "A browser refused Adbrella's certificate ${fmt(refused)} times: it is not installed or not trusted on this phone, so pages pass through untouched. Install it from Advanced › Deep clean.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                } else if (intercepting && pages == 0L) {
                     Text(
                         "If pages tidied stays at 0 while you browse: fully close Chrome and reopen it (it keeps old connections), and turn off Chrome › Settings › Privacy › Use secure DNS.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 }
-                TextButton(onClick = { nav.push(Screen.Advanced) }) { Text("Open Advanced") }
+                Text(
+                    "Not sure it is working? Open the test page in your browser: if it loads, everything up to the certificate is fine and it shows whether sample ad boxes get removed. A certificate warning means the certificate is not installed; a page that never loads means deep clean is off.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+                Row {
+                    Button(onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse("https://rules.adbrella.internal/test")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }.onFailure { Toast.makeText(context, "No browser found", Toast.LENGTH_SHORT).show() }
+                    }) { Text("Test in your browser") }
+                    TextButton(onClick = { nav.push(Screen.Advanced) }) { Text("Open Advanced") }
+                }
             }
         }
         Text(

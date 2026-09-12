@@ -24,6 +24,9 @@ const html = `<!doctype html><html><head></head><body><main>
  <div id="latinThread" class="thread"><span>Ad</span> <span>maiora semper</span></div>
  <div id="lateColumn" class="col"><div id="lateColumnAd" class="ad"></div></div>
  <div id="inArticle" class="post"><div class="wp-block-group"><div id="ad_inarticle_1"></div></div></div>
+ <div id="videoWrap" class="embed" style="min-height:300px"><iframe src="https://www.youtube.com/embed/abc"></iframe></div>
+ <div id="adFrameWrap" class="slot-top" style="min-height:250px"><iframe src="https://securepubads.g.doubleclick.net/gampad/ads?x"></iframe></div>
+ <div id="mapWrap" class="map" style="min-height:250px"><iframe src="https://www.google.com/maps/embed?pb=1"></iframe></div>
  <div id="sidebar" class="sidebar"><div class="widget"><h3>Più letti</h3><p>Un elenco di articoli con abbastanza testo.</p></div><div class="widget"><div id="sidebarAd" class="adv"></div></div></div>
 </main></body></html>`;
 
@@ -36,6 +39,7 @@ const want = {
   advLabelBox: 'HIDDEN', widgetAroundBanner: 'HIDDEN', reservedBox: 'HIDDEN', inArticle: 'HIDDEN', sidebarAd: 'HIDDEN',
   plainContent: 'shown', advertorialWithText: 'shown', loadMore: 'shown', advancedSearch: 'shown', adFreePitch: 'shown', latinThread: 'shown',
   sidebar: 'shown', lateColumn: 'shown', lazy: 'HIDDEN', lazyWrap: 'HIDDEN',
+  videoWrap: 'shown', mapWrap: 'shown', adFrameWrap: 'HIDDEN',
 };
 const st = id => { const e = d.getElementById(id); return e ? (e.getAttribute('data-adb') ? 'HIDDEN' : 'shown') : '-'; };
 
