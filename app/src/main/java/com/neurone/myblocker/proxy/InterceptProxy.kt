@@ -87,6 +87,7 @@ class InterceptProxy(
 
     private fun handle(client: Socket) {
         connections++
+        DeepCleanStats.connections = connections
         val target = pending.remove(client.port)
         if (target == null) {
             runCatching { client.close() }
@@ -152,6 +153,7 @@ class InterceptProxy(
     /** Splices the client's raw TLS stream to the origin and back, so certificate pinning is preserved. */
     private fun passthrough(client: Socket, clientReplay: InputStream, target: Target) {
         passthroughs++
+        DeepCleanStats.passthroughs = passthroughs
         val upstream = Socket()
         try {
             protect(upstream)
@@ -281,7 +283,10 @@ class InterceptProxy(
                         val nonce = randomNonce()
                         if (canInject) {
                             val injected = inject(bytes, pageHost, nonce)
-                            if (injected !== bytes) pagesTidied++
+                            if (injected !== bytes) {
+                                pagesTidied++
+                                DeepCleanStats.pagesTidied = pagesTidied
+                            }
                             bytes = injected
                             resp.remove("Content-Encoding")
                         }
@@ -570,11 +575,15 @@ function empty(el){
  return true;
 }
 function hide(el){try{if(el&&el.style&&el.getAttribute('data-adb')!=='1'){el.style.setProperty('display','none','important');el.setAttribute('data-adb','1');}}catch(e){}}
+function labelOnly(el){var t=(el.textContent||'').replace(/\s+/g,' ').trim();return t.length<=18&&LABEL.test(t);}
 function sweep(){try{
  var s=document.querySelectorAll('ins.adsbygoogle,[id^=google_ads_],[id^=div-gpt-ad],[id*=div-gpt-ad],iframe[src*=doubleclick],iframe[src*=googlesyndication],iframe[src*=amazon-adsystem],iframe[src*=adnxs],[data-ad-slot],[data-google-query-id]');
  for(var i=0;i<s.length;i++)hide(s[i]);
- var d=document.querySelectorAll('div,section,aside,ul,li,figure');
- for(var j=0;j<d.length;j++){var el=d[j];if(el.getAttribute('data-adb')==='1')continue;if(adish(el)&&empty(el))hide(el);}
+ var d=document.querySelectorAll('div,section,aside,ul,li,figure,ins,span');
+ for(var j=0;j<d.length;j++){var el=d[j];if(el.getAttribute('data-adb')==='1')continue;
+  // Placeholder whose entire visible text is just an ad label (e.g. a grey "ADV" box), whatever its class.
+  if(labelOnly(el)&&!el.querySelector('img[src],video,canvas,input,h1,h2,h3')){hide(el);var p=el.parentElement;if(p&&labelOnly(p))hide(p);continue;}
+  if(adish(el)&&empty(el))hide(el);}
 }catch(e){}}
 function run(){sweep();}
 if(document.readyState!=='loading')run();else document.addEventListener('DOMContentLoaded',run);

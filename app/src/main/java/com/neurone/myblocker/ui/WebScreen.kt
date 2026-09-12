@@ -37,9 +37,41 @@ fun WebScreen(nav: Navigator) {
     var updating by remember { mutableStateOf(false) }
     val fmtDate = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
 
+    val ds = com.neurone.myblocker.proxy.DeepCleanStats
+    val intercepting = remember(tick) { ds.intercepting }
+    val pages = remember(tick) { ds.pagesTidied }
+    val conns = remember(tick) { ds.connections }
+    val quic = remember(tick) { ds.quicDropped }
+    val deepClean = remember(changes) { prefs.deepClean }
+
     Page(title = "Tidy web pages", onBack = nav.pop) {
+        SectionCard("Chrome, Brave and other browsers") {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    when {
+                        intercepting -> "Active. Tidying pages in Chrome, Brave and similar browsers."
+                        deepClean -> "Deep clean is on but page tidying is not active. Install the certificate and enable \"Tidy pages in browsers\" under Advanced."
+                        else -> "Off. Turn on Advanced › Deep clean and \"Tidy pages in browsers\", and install the certificate."
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    "Browser connections seen: ${fmt(conns)} · pages tidied: ${fmt(pages)} · QUIC forced to TCP: ${fmt(quic)}",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                if (intercepting && pages == 0L) {
+                    Text(
+                        "If pages tidied stays at 0 while you browse: fully close Chrome and reopen it (it keeps old connections), and turn off Chrome › Settings › Privacy › Use secure DNS.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                TextButton(onClick = { nav.push(Screen.Advanced) }) { Text("Open Advanced") }
+            }
+        }
         Text(
-            "Blocking an ad at DNS level leaves an empty box where it would have been. Adbrella can also act as a content blocker inside Samsung Internet: EasyList rules hide those boxes and let the page reflow, so it looks like the ad was never there.",
+            "This tidies pages in any Chromium browser (Chrome, Brave, Samsung Internet). The Samsung Internet content-blocker below is a lighter alternative that needs no certificate but works only in that browser.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp),
         )
         SectionCard("Samsung Internet") {

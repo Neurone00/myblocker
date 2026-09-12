@@ -12,6 +12,7 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.neurone.myblocker.Prefs
 import com.neurone.myblocker.filter.FilterEngine
+import com.neurone.myblocker.proxy.DeepCleanStats
 import com.neurone.myblocker.proxy.InterceptProxy
 import com.neurone.myblocker.tls.CaInstall
 import com.neurone.myblocker.web.WebFilters
@@ -157,6 +158,8 @@ class BlockerVpnService : VpnService() {
             val upstream = UpstreamFactory.create(this) { protect(it) }
             var relay: FullTunnel? = null
             var intercept: InterceptProxy? = null
+            DeepCleanStats.reset()
+            DeepCleanStats.intercepting = false
             if (prefs.deepClean) {
                 val resolverIps = (HARDCODED_RESOLVERS + HARDCODED_RESOLVERS_V6 + DNS_ADDRESS_V4 + DNS_ADDRESS_V6)
                     .mapNotNull { runCatching { java.net.InetAddress.getByName(it).address.toList() }.getOrNull() }.toHashSet()
@@ -179,9 +182,13 @@ class BlockerVpnService : VpnService() {
                             (dstPort == 53 || dstPort == 853 || dstPort == 443) && dst.toList() in resolverIps
 
                         override fun dropUdp(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean {
-                            // No QUIC for intercepted browsers: forces HTTP over TCP where pages can be tidied.
-                            if (intercept == null || dstPort != 443) return false
-                            return browsers.isBrowserUdp(src, srcPort, dst, dstPort)
+                            // While intercepting, drop all QUIC (UDP/443). Per-connection UID lookup is
+                            // unreliable for UDP, and if a browser stays on HTTP/3 it bypasses tidying
+                            // entirely. Dropping QUIC makes every client fall back to interceptable TCP;
+                            // non-browser apps simply use TCP and still pass through untouched.
+                            val drop = intercept != null && dstPort == 443
+                            if (drop) DeepCleanStats.quicDropped++
+                            return drop
                         }
 
                         override fun intercept(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean {
@@ -202,6 +209,7 @@ class BlockerVpnService : VpnService() {
                 relayThread = Thread(relay, "relay").also { it.isDaemon = true }
             }
             interceptProxy = intercept
+            DeepCleanStats.intercepting = intercept != null
             val p = DnsProxy(
                 pfd, upstream, prefs.blockMode, MTU, { onQuery(it) }, relay,
                 internalHost = if (intercept != null) InterceptProxy.INTERNAL_HOST else null,

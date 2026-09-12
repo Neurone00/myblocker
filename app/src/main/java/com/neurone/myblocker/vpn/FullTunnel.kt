@@ -207,8 +207,11 @@ class FullTunnel(
                 channel = ch
                 val r = redirect
                 if (r != null && policy.intercept(clientAddr, clientPort, serverAddr, serverPort)) {
-                    ch.connect(r.address)
+                    // Bind and register the real destination BEFORE connecting, so the proxy's accept
+                    // thread can never look up the mapping before it exists (it keys on our local port).
+                    ch.bind(InetSocketAddress(InetAddress.getLoopbackAddress(), 0))
                     r.register(ch.socket().localPort, serverAddr, serverPort)
+                    ch.connect(r.address)
                 } else {
                     ch.connect(InetSocketAddress(InetAddress.getByAddress(serverAddr), serverPort))
                 }
