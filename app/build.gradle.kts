@@ -67,6 +67,11 @@ android {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}")
     }
 
+    testOptions {
+        // Unit tests touch android.util.Log through the engine classes; stubs return defaults instead of throwing.
+        unitTests.isReturnDefaultValues = true
+    }
+
     lint {
         // Lint findings must never break the CI build; run ./gradlew lint to review them.
         checkReleaseBuilds = false
