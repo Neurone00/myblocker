@@ -77,6 +77,7 @@ fun HomeScreen(nav: Navigator) {
     val running by BlockerVpnService.running.collectAsStateWithLifecycle()
     val starting by BlockerVpnService.starting.collectAsStateWithLifecycle()
     val stateText by BlockerVpnService.stateText.collectAsStateWithLifecycle()
+    val carPaused by BlockerVpnService.carPaused.collectAsStateWithLifecycle()
     val update by Updater.state.collectAsStateWithLifecycle()
     val autoStart by MainActivity.autoStart.collectAsStateWithLifecycle()
     val tick by rememberTick(1000)
@@ -200,6 +201,7 @@ fun HomeScreen(nav: Navigator) {
                         when {
                             running -> "You're covered"
                             starting -> "Opening up…"
+                            carPaused -> "Paused for Android Auto"
                             else -> "Umbrella down"
                         },
                         style = MaterialTheme.typography.titleLarge,
@@ -211,6 +213,7 @@ fun HomeScreen(nav: Navigator) {
                         when {
                             running -> "Ads keep knocking. Nobody's home."
                             starting -> stateText
+                            carPaused -> "Android Auto refuses any VPN. Back on the moment you leave the car."
                             BlockerVpnService.lastError != null -> BlockerVpnService.lastError ?: ""
                             else -> "Ads are walking right in."
                         },
@@ -224,7 +227,13 @@ fun HomeScreen(nav: Navigator) {
                 Spacer(Modifier.width(12.dp))
                 Switch(
                     checked = on,
-                    onCheckedChange = { want -> if (want) turnOn() else BlockerVpnService.stop(context) },
+                    onCheckedChange = { want ->
+                        when {
+                            want && carPaused -> android.widget.Toast.makeText(context, "Android Auto is connected. Adbrella comes back by itself when you leave the car.", android.widget.Toast.LENGTH_LONG).show()
+                            want -> turnOn()
+                            else -> BlockerVpnService.stop(context)
+                        }
+                    },
                     modifier = Modifier.scale(1.15f),
                 )
             }

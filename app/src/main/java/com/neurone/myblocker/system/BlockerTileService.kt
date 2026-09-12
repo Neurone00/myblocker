@@ -48,7 +48,11 @@ class BlockerTileService : TileService() {
         val on = BlockerVpnService.isRunning
         tile.state = if (on) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         tile.label = "Adbrella"
-        tile.subtitle = if (on) "${StatsStore.todayBlocked()} bounced today" else "Closed"
+        tile.subtitle = when {
+            on -> "${StatsStore.todayBlocked()} bounced today"
+            BlockerVpnService.carPaused.value -> "Paused for Android Auto"
+            else -> "Closed"
+        }
         tile.updateTile()
     }
 }

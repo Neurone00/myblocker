@@ -79,17 +79,18 @@ class BlockerVpnService : VpnService() {
             override fun onReceive(ctx: Context, intent: Intent) {
                 when (intent.action) {
                     android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED -> if (isCarBluetooth(intent)) onCarSignal("bt", true)
-                    android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED -> if (isCarBluetooth(intent)) onCarSignal("bt", false)
+                    android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED -> if (isCarBluetooth(intent)) { onCarSignal("bt", false); onCarSignal("aa", false) }
                     android.app.UiModeManager.ACTION_ENTER_CAR_MODE -> onCarSignal("carmode", true)
-                    android.app.UiModeManager.ACTION_EXIT_CAR_MODE -> onCarSignal("carmode", false)
+                    android.app.UiModeManager.ACTION_EXIT_CAR_MODE -> { onCarSignal("carmode", false); onCarSignal("aa", false) }
                     USB_STATE -> {
                         // Wired Android Auto puts the phone in USB accessory mode; a plain charger does not.
                         val connected = intent.getBooleanExtra("connected", false)
                         val accessory = intent.getBooleanExtra(USB_ACCESSORY_EXTRA, false)
                         onCarSignal("usb", connected && accessory)
+                        if (!connected) onCarSignal("aa", false) // cable out: the traffic-based reason ends too
                     }
                     android.hardware.usb.UsbManager.ACTION_USB_ACCESSORY_ATTACHED -> onCarSignal("usb", true)
-                    android.hardware.usb.UsbManager.ACTION_USB_ACCESSORY_DETACHED -> onCarSignal("usb", false)
+                    android.hardware.usb.UsbManager.ACTION_USB_ACCESSORY_DETACHED -> { onCarSignal("usb", false); onCarSignal("aa", false) }
                 }
             }
         }
@@ -106,7 +107,7 @@ class BlockerVpnService : VpnService() {
         carReceiver = r
         // Projection state is a late but reliable extra signal (reports both connect and disconnect).
         carConnection = com.neurone.myblocker.system.CarConnection(this) { projecting ->
-            handler.post { onCarSignal("projection", projecting) }
+            handler.post { onCarSignal("projection", projecting); if (!projecting) onCarSignal("aa", false) }
         }
         carConnection?.start()
         // If we are already in the car when the service starts (mid-drive), pause now.
@@ -120,12 +121,37 @@ class BlockerVpnService : VpnService() {
         if (!Prefs.get(this).pauseForAndroidAuto) return
         val changed = if (present) carReasons.add(reason) else carReasons.remove(reason)
         if (!changed) return
+        if (reason == "aa" && present) {
+            handler.removeCallbacks(aaPoll)
+            handler.postDelayed(aaPoll, AA_POLL_MS)
+        }
         applyCarPause(carReasons.isNotEmpty())
+    }
+
+    /**
+     * The Android Auto app talking on the network is the one signal that cannot miss, but once we
+     * pause we go blind to it, so while "aa" is the reason we poll for any trace of the car (a USB
+     * data connection, the car's Bluetooth, projection) and release the pause when none is left.
+     */
+    private val aaPoll = object : Runnable {
+        override fun run() {
+            if (!carReasons.contains("aa")) return
+            val carStillHere = isUsbDataConnectedNow() || isCarBluetoothConnectedNow() ||
+                com.neurone.myblocker.system.CarConnection.isProjecting(this@BlockerVpnService)
+            if (carStillHere) handler.postDelayed(this, AA_POLL_MS) else onCarSignal("aa", false)
+        }
+    }
+
+    private fun isUsbDataConnectedNow(): Boolean = try {
+        registerReceiver(null, android.content.IntentFilter(USB_STATE))?.getBooleanExtra("connected", false) ?: false
+    } catch (e: Exception) {
+        false
     }
 
     private fun applyCarPause(wantPaused: Boolean) {
         if (wantPaused && !pausedForCar) {
             pausedForCar = true
+            carPaused.value = true
             state = "Paused for Android Auto"
             Log.i(TAG, "car connected: pausing protection (${carReasons.joinToString()})")
             stopRequested = true
@@ -138,6 +164,7 @@ class BlockerVpnService : VpnService() {
             runCatching { Notifications.updateRunning(this) }
         } else if (!wantPaused && pausedForCar) {
             pausedForCar = false
+            carPaused.value = false
             Log.i(TAG, "car disconnected: resuming protection")
             if (Prefs.get(this).wantsProtection) {
                 stopRequested = false
@@ -488,9 +515,12 @@ class BlockerVpnService : VpnService() {
     private fun onQuery(event: QueryEvent) {
         val prefs = Prefs.get(this)
         val log = prefs.logEnabled
+        // Android Auto starting up is visible here before anything else: its first lookups.
+        val watchCar = prefs.pauseForAndroidAuto && !pausedForCar
         logExecutor.execute {
             val d = event.datagram
-            val pkg = if (log) appNames.packageFor(d.src, d.srcPort, d.dst, d.dstPort) else null
+            val pkg = if (log || watchCar) appNames.packageFor(d.src, d.srcPort, d.dst, d.dstPort) else null
+            if (watchCar && pkg == GEARHEAD) handler.post { onCarSignal("aa", true) }
             StatsStore.record(event.question.name, event.decision.blocked, pkg, event.time)
             if (log) {
                 QueryLog.add(
@@ -544,6 +574,10 @@ class BlockerVpnService : VpnService() {
             private set(v) { field = v; starting.value = v }
         @Volatile var state: String = "Off"
             private set(v) { field = v; stateText.value = v }
+        /** True while protection is held down for Android Auto; the UI shows why the switch is off. */
+        val carPaused = MutableStateFlow(false)
+        const val GEARHEAD = "com.google.android.projection.gearhead"
+        private const val AA_POLL_MS = 90_000L
         @Volatile var lastError: String? = null
             private set
 

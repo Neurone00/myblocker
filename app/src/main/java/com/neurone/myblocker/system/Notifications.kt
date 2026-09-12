@@ -48,10 +48,15 @@ object Notifications {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val today = StatsStore.todayBlocked()
-        val text = if (starting && !BlockerVpnService.isRunning) "Opening…" else "$today bounced today · ${StatsStore.totalBlocked} all time"
+        val paused = BlockerVpnService.carPaused.value && !BlockerVpnService.isRunning
+        val text = when {
+            paused -> "Back on by itself when you leave the car."
+            starting && !BlockerVpnService.isRunning -> "Opening…"
+            else -> "$today bounced today · ${StatsStore.totalBlocked} all time"
+        }
         return Notification.Builder(context, CHANNEL_RUNNING)
             .setSmallIcon(R.drawable.ic_umbrella)
-            .setContentTitle(if (BlockerVpnService.isRunning || starting) "Umbrella open" else "Adbrella")
+            .setContentTitle(when { paused -> "Paused for Android Auto"; BlockerVpnService.isRunning || starting -> "Umbrella open"; else -> "Adbrella" })
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

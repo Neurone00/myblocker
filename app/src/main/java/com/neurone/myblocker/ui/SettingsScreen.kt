@@ -275,7 +275,7 @@ fun AboutScreen(nav: Navigator) {
         )
         AboutSection(
             "Android Auto",
-            "Android Auto refuses to start whenever any VPN is active (\"communication error 21\"), and it checks before it ever reports being connected, so waiting for it to connect is too late. Adbrella instead pauses the moment your phone joins the car — over Bluetooth, in car mode, or through the USB cable (wired Android Auto puts the phone in USB accessory mode, which a plain charger does not) — all of which happen before Android Auto starts, and resumes when you leave. Grant the Nearby devices permission so it can tell the car apart from headphones.",
+            "Android Auto refuses to start whenever any VPN is active (\"communication error 21\"), and it checks before it ever reports being connected, so waiting for it to connect is too late. Adbrella switches itself off the moment your phone joins the car — over Bluetooth, in car mode, through the USB cable (wired Android Auto puts the phone in USB accessory mode, which a plain charger does not), or as soon as the Android Auto app itself starts talking on the network — and switches back on when you leave (cable out, car Bluetooth gone, Android Auto disconnected). The home card says \"Paused for Android Auto\" meanwhile. Grant the Nearby devices permission so it can tell the car apart from headphones.",
             "If you use Always-on VPN, keep \"Block connections without VPN\" off, otherwise the phone has no network while paused and Android Auto still cannot connect.",
         )
         AboutSection(
