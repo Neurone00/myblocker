@@ -36,7 +36,7 @@ fun CertificateRows() {
         Text("Certificate for page tidying", style = MaterialTheme.typography.bodyLarge)
         Text(
             when {
-                installed -> "Installed. Browser pages can be tidied once that feature ships."
+                installed -> "Installed. With Deep clean on, pages in Chrome, Brave and Samsung Internet get their empty ad boxes removed. Restart the umbrella after installing."
                 exists -> "Created, not yet installed. Save it to Downloads, then install it from Settings."
                 else -> "Not created yet. Adbrella makes a private certificate that stays on this phone; you install only its public half."
             },

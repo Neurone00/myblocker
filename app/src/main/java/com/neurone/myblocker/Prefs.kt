@@ -121,6 +121,11 @@ class Prefs private constructor(context: Context) {
         get() = sp.getBoolean(KEY_DEEP_CLEAN, false)
         set(v) = sp.edit().putBoolean(KEY_DEEP_CLEAN, v).apply()
 
+    /** In deep clean, open browser HTTPS (with the installed local certificate) to tidy pages. */
+    var interceptBrowsers: Boolean
+        get() = sp.getBoolean(KEY_INTERCEPT, true)
+        set(v) = sp.edit().putBoolean(KEY_INTERCEPT, v).apply()
+
     var autoUpdateApp: Boolean
         get() = sp.getBoolean(KEY_AUTO_UPDATE_APP, true)
         set(v) = sp.edit().putBoolean(KEY_AUTO_UPDATE_APP, v).apply()
@@ -186,6 +191,7 @@ class Prefs private constructor(context: Context) {
         private const val KEY_CATCH_RESOLVERS = "catch_resolvers"
         private const val KEY_AUTO_UPDATE_APP = "auto_update_app"
         private const val KEY_DEEP_CLEAN = "deep_clean"
+        private const val KEY_INTERCEPT = "intercept_browsers"
         private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
         private const val KEY_ALWAYS_ON_ACK = "always_on_ack"
         private const val KEY_WEB_UPDATED = "web_updated"

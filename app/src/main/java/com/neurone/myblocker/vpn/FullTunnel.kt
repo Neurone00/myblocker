@@ -40,9 +40,20 @@ class FullTunnel(
         fun resetTcp(dst: ByteArray, dstPort: Int): Boolean
         /** Silently drop this datagram (e.g. QUIC from a browser we intercept). */
         fun dropUdp(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean
-        /** Called once per new TCP flow with the owning app's UID, or -1. May be used for stats. */
+        /** Send this new TCP flow to the local intercepting proxy instead of the real destination. */
+        fun intercept(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean = false
+        /** Called once per new TCP flow. May be used for stats. */
         fun onTcpFlow(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int) {}
     }
+
+    /** Where intercepted flows go, and how the proxy learns their original destination. */
+    interface Redirect {
+        val address: InetSocketAddress
+        fun register(localPort: Int, dst: ByteArray, dstPort: Int)
+    }
+
+    /** Set before the relay starts; null means nothing is intercepted. */
+    @Volatile var redirect: Redirect? = null
 
     private val selector: Selector = Selector.open()
     private val inbound = ConcurrentLinkedQueue<ByteArray>()
@@ -190,7 +201,13 @@ class FullTunnel(
                 protectTcp(ch.socket())
                 ch.socket().tcpNoDelay = true
                 channel = ch
-                ch.connect(InetSocketAddress(InetAddress.getByAddress(serverAddr), serverPort))
+                val r = redirect
+                if (r != null && policy.intercept(clientAddr, clientPort, serverAddr, serverPort)) {
+                    ch.connect(r.address)
+                    r.register(ch.socket().localPort, serverAddr, serverPort)
+                } else {
+                    ch.connect(InetSocketAddress(InetAddress.getByAddress(serverAddr), serverPort))
+                }
                 selKey = ch.register(selector, SelectionKey.OP_CONNECT, this)
             } catch (e: Exception) {
                 Log.d(TAG, "connect failed ${addr(serverAddr)}:$serverPort: ${e.message}")

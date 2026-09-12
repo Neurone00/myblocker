@@ -133,6 +133,23 @@ object DnsMessage {
         return out.toByteArray()
     }
 
+    /** Answers an A query with [ipv4]; AAAA and other types get NODATA. Used for the internal rules host. */
+    fun buildAddressAnswer(query: ByteArray, q: DnsQuestion, ipv4: ByteArray, ttl: Int = 300): ByteArray {
+        val out = ByteArrayOutputStream(q.questionEnd + 32)
+        val questionBytes = query.copyOfRange(HEADER_LENGTH, q.questionEnd)
+        if (q.type == TYPE_A) {
+            writeHeader(out, q, RCODE_NOERROR, anCount = 1, nsCount = 0)
+            out.write(questionBytes)
+            writeRecordHead(out, TYPE_A, ttl, 4)
+            out.write(ipv4)
+        } else {
+            writeHeader(out, q, RCODE_NOERROR, anCount = 0, nsCount = 1)
+            out.write(questionBytes)
+            writeSoa(out, ttl)
+        }
+        return out.toByteArray()
+    }
+
     /** SERVFAIL for the given query; used when every upstream fails. */
     fun buildServfail(query: ByteArray, q: DnsQuestion): ByteArray {
         val out = ByteArrayOutputStream(q.questionEnd)

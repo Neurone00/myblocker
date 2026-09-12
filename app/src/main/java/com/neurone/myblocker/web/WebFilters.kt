@@ -39,6 +39,23 @@ object WebFilters {
 
     fun file(context: Context): File = File(File(context.filesDir, "web").also { it.mkdirs() }, FILE)
 
+    @Volatile private var cosmetic: CosmeticRules? = null
+
+    /** Element-hiding rules parsed from the current list; parsed once and after every refresh. */
+    fun cosmeticRules(context: Context): CosmeticRules {
+        cosmetic?.let { return it }
+        synchronized(this) {
+            cosmetic?.let { return it }
+            val r = runCatching { CosmeticRules.parse(ensure(context)) }.getOrElse { CosmeticRules.EMPTY }
+            cosmetic = r
+            return r
+        }
+    }
+
+    private fun invalidateCosmetic() {
+        cosmetic = null
+    }
+
     /** Makes sure the bundled list is on disk; cheap once done. */
     @Synchronized
     fun ensure(context: Context): File {
@@ -96,6 +113,7 @@ object WebFilters {
             val prefs = Prefs.get(context)
             prefs.webFiltersUpdated = System.currentTimeMillis()
             prefs.webFiltersRules = countRules(f)
+            invalidateCosmetic()
             notifyBrowser(context)
             null
         } catch (e: Exception) {

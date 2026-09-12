@@ -12,6 +12,9 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.neurone.myblocker.Prefs
 import com.neurone.myblocker.filter.FilterEngine
+import com.neurone.myblocker.proxy.InterceptProxy
+import com.neurone.myblocker.tls.CaInstall
+import com.neurone.myblocker.web.WebFilters
 import com.neurone.myblocker.stats.Achievements
 import com.neurone.myblocker.stats.AppNames
 import com.neurone.myblocker.stats.LogEntry
@@ -34,6 +37,7 @@ class BlockerVpnService : VpnService() {
     private var proxy: DnsProxy? = null
     private var thread: Thread? = null
     private var relayThread: Thread? = null
+    private var interceptProxy: InterceptProxy? = null
     @Volatile private var stopRequested = false
     private var restarts = 0
     /** Incremented for every tunnel thread; lets a dying thread tell whether it has been superseded. */
@@ -152,9 +156,19 @@ class BlockerVpnService : VpnService() {
             tun = pfd
             val upstream = UpstreamFactory.create(this) { protect(it) }
             var relay: FullTunnel? = null
+            var intercept: InterceptProxy? = null
             if (prefs.deepClean) {
                 val resolverIps = (HARDCODED_RESOLVERS + HARDCODED_RESOLVERS_V6 + DNS_ADDRESS_V4 + DNS_ADDRESS_V6)
                     .mapNotNull { runCatching { java.net.InetAddress.getByName(it).address.toList() }.getOrNull() }.toHashSet()
+                val internalIp = InterceptProxy.INTERNAL_IP.toList()
+                // Page tidying needs the local certificate to be trusted by the browser; otherwise stay transparent.
+                val canIntercept = prefs.interceptBrowsers && CaInstall.isInstalled(this)
+                if (canIntercept) {
+                    intercept = InterceptProxy(CaInstall.get(this), { protect(it) }, { WebFilters.cosmeticRules(this) })
+                    intercept.start()
+                    Thread({ WebFilters.cosmeticRules(this) }, "cosmetic-parse").start()
+                }
+                val browsers = BrowserUids(this)
                 relay = FullTunnel(
                     protectTcp = { protect(it) },
                     protectUdp = { protect(it) },
@@ -162,12 +176,36 @@ class BlockerVpnService : VpnService() {
                     policy = object : FullTunnel.Policy {
                         override fun resetTcp(dst: ByteArray, dstPort: Int): Boolean =
                             (dstPort == 53 || dstPort == 853 || dstPort == 443) && dst.toList() in resolverIps
-                        override fun dropUdp(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean = false
+
+                        override fun dropUdp(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean {
+                            // No QUIC for intercepted browsers: forces HTTP over TCP where pages can be tidied.
+                            if (intercept == null || dstPort != 443) return false
+                            return browsers.isBrowserUdp(src, srcPort, dst, dstPort)
+                        }
+
+                        override fun intercept(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean {
+                            if (intercept == null) return false
+                            if (dst.toList() == internalIp) return true
+                            if (dstPort != 443 && dstPort != 80) return false
+                            return browsers.isBrowserTcp(src, srcPort, dst, dstPort)
+                        }
                     },
                 )
+                val ip = intercept
+                if (ip != null) {
+                    relay.redirect = object : FullTunnel.Redirect {
+                        override val address = java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), ip.port)
+                        override fun register(localPort: Int, dst: ByteArray, dstPort: Int) = ip.register(localPort, dst, dstPort)
+                    }
+                }
                 relayThread = Thread(relay, "relay").also { it.isDaemon = true }
             }
-            val p = DnsProxy(pfd, upstream, prefs.blockMode, MTU, { onQuery(it) }, relay)
+            interceptProxy = intercept
+            val p = DnsProxy(
+                pfd, upstream, prefs.blockMode, MTU, { onQuery(it) }, relay,
+                internalHost = if (intercept != null) InterceptProxy.INTERNAL_HOST else null,
+                internalIp = InterceptProxy.INTERNAL_IP,
+            )
             proxy = p
             relayThread?.start()
             isRunning = true
@@ -185,6 +223,8 @@ class BlockerVpnService : VpnService() {
         } finally {
             val wasStopRequested = stopRequested
             runCatching { tun?.close() }
+            runCatching { interceptProxy?.stop() }
+            interceptProxy = null
             if (gen == generation) {
                 tun = null
                 proxy = null
