@@ -41,6 +41,8 @@ class DnsProxy(
     private val blockMode: BlockMode,
     private val mtu: Int,
     private val listener: (QueryEvent) -> Unit,
+    /** Present in deep-clean mode: everything that is not DNS is handed to the relay. */
+    private val relay: FullTunnel? = null,
 ) : Runnable {
     @Volatile private var running = true
     private val input = FileInputStream(tun.fileDescriptor)
@@ -88,6 +90,7 @@ class DnsProxy(
             }
         }
         running = false
+        relay?.stop()
         workers.shutdownNow()
         runCatching { upstream.close() }
         Log.i(TAG, "proxy loop ended")
@@ -101,16 +104,25 @@ class DnsProxy(
 
     private fun handlePacket(buf: ByteArray, len: Int) {
         when (val p = IpPackets.parse(buf, len)) {
-            is ParsedPacket.Udp -> if (p.datagram.dstPort == 53) handleDns(p.datagram, buf)
-            is ParsedPacket.Syn -> {
-                // Only resolver addresses are routed here, so any TCP SYN is DNS-over-TCP, a
-                // Private-DNS probe (853) or DNS-over-HTTPS (443) to a captured public resolver.
-                // Refuse immediately so the client falls back to plain DNS instead of timing out.
-                if (p.syn.dstPort == 53 || p.syn.dstPort == 853 || p.syn.dstPort == 443) writeToTun(IpPackets.buildTcpRst(p.syn))
+            is ParsedPacket.Udp -> {
+                if (p.datagram.dstPort == 53) handleDns(p.datagram, buf) else relay?.offer(buf, len)
+            }
+            is ParsedPacket.Tcp -> {
+                if (relay != null) {
+                    relay.offer(buf, len)
+                } else if (p.segment.syn && !p.segment.ackFlag) {
+                    // DNS-only mode: only resolver addresses are routed here, so any TCP SYN is
+                    // DNS-over-TCP, a Private-DNS probe (853) or DNS-over-HTTPS (443) to a captured
+                    // public resolver. Refuse immediately so the client falls back to plain DNS.
+                    val port = p.segment.dstPort
+                    if (port == 53 || port == 853 || port == 443) writeToTun(IpPackets.buildTcpRst(p.segment))
+                }
             }
             ParsedPacket.Other -> Unit
         }
     }
+
+    fun writePacket(packet: ByteArray) = writeToTun(packet)
 
     private fun handleDns(udp: UdpDatagram, buf: ByteArray) {
         if (udp.payloadLength < DnsMessage.HEADER_LENGTH) return

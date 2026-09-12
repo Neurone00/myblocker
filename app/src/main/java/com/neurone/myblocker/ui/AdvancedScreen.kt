@@ -91,6 +91,16 @@ fun AdvancedScreen(nav: Navigator) {
                 needsRestart = true
             }
         }
+        SectionCard("Deep clean (beta)") {
+            SwitchRow(
+                "Route all traffic through Adbrella",
+                "Foundation for tidying pages inside Chrome. Every connection is relayed by the app instead of only DNS. No page changes yet; turn off if anything misbehaves.",
+                remember(changes) { prefs.deepClean },
+            ) {
+                prefs.deepClean = it
+                needsRestart = true
+            }
+        }
         SectionCard("Diagnostics") {
             SwitchRow("Activity log", "Keep the last 1,500 lookups with the app that made them. Needed for per-app stats.", remember(changes) { prefs.logEnabled }) { prefs.logEnabled = it }
             RowDivider()

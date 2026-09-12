@@ -87,15 +87,46 @@ class IpPacketsTest {
         p[24] = 0; p[25] = 0; p[26] = 0x10; p[27] = 0x00 // seq 4096
         p[32] = 0x50; p[33] = 0x02 // data offset 5, SYN
         val parsed = IpPackets.parse(p, 40)
-        assertTrue(parsed is ParsedPacket.Syn)
-        val syn = (parsed as ParsedPacket.Syn).syn
+        assertTrue(parsed is ParsedPacket.Tcp)
+        val syn = (parsed as ParsedPacket.Tcp).segment
+        assertTrue(syn.syn)
         assertEquals(853, syn.dstPort)
         assertEquals(4096L, syn.seq)
+        assertEquals(0, syn.payloadLength)
         val rst = IpPackets.buildTcpRst(syn)
         assertEquals(40, rst.size)
         assertEquals(0x14, rst[33].toInt())
         assertEquals(4097L, IpPackets.u32(rst, 28))
         assertEquals(853, IpPackets.u16(rst, 20))
+        // checksum of the built segment verifies to zero over the pseudo header
+        val pseudo = ByteArray(12).also { byteArrayOf(10, 111, 222.toByte(), 2).copyInto(it, 0); byteArrayOf(10, 111, 222.toByte(), 1).copyInto(it, 4); it[9] = 6; it[11] = 20 }
+        assertEquals(0, IpPackets.checksum(pseudo, rst.copyOfRange(20, 40), 20))
+    }
+
+    @Test fun tcpBuildParseRoundTrip() {
+        val src = byteArrayOf(10, 111, 222.toByte(), 1)
+        val dst = byteArrayOf(93, 184.toByte(), 216.toByte(), 34)
+        val payload = "GET / HTTP/1.1\r\n".toByteArray()
+        val pkt = IpPackets.buildTcp(4, src, dst, 51000, 443, 0xFFFFFFF0L, 77L, IpPackets.TCP_PSH or IpPackets.TCP_ACK, 65535, payload, 0, payload.size)
+        val parsed = IpPackets.parse(pkt, pkt.size) as ParsedPacket.Tcp
+        val s = parsed.segment
+        assertEquals(51000, s.srcPort)
+        assertEquals(443, s.dstPort)
+        assertEquals(0xFFFFFFF0L, s.seq)
+        assertEquals(77L, s.ack)
+        assertTrue(s.ackFlag)
+        assertTrue(!s.syn)
+        assertEquals(65535, s.window)
+        assertEquals(payload.size, s.payloadLength)
+        assertArrayEquals(payload, pkt.copyOfRange(s.payloadOffset, s.payloadOffset + s.payloadLength))
+        assertEquals(0, IpPackets.checksum(null, pkt, 20))
+
+        val synAck = IpPackets.buildTcp(4, dst, src, 443, 51000, 1000L, 2000L, IpPackets.TCP_SYN or IpPackets.TCP_ACK, 65535, null, 0, 0, mss = 1400)
+        val sa = (IpPackets.parse(synAck, synAck.size) as ParsedPacket.Tcp).segment
+        assertTrue(sa.syn && sa.ackFlag)
+        assertEquals(1400, sa.mss)
+        assertEquals(0, sa.payloadLength)
+        assertEquals(44, synAck.size)
     }
 
     @Test fun ignoresFragmentsAndOtherProtocols() {

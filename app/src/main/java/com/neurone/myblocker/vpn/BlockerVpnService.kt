@@ -33,6 +33,7 @@ class BlockerVpnService : VpnService() {
     private var tun: ParcelFileDescriptor? = null
     private var proxy: DnsProxy? = null
     private var thread: Thread? = null
+    private var relayThread: Thread? = null
     @Volatile private var stopRequested = false
     private var restarts = 0
     /** Incremented for every tunnel thread; lets a dying thread tell whether it has been superseded. */
@@ -150,8 +151,25 @@ class BlockerVpnService : VpnService() {
             }
             tun = pfd
             val upstream = UpstreamFactory.create(this) { protect(it) }
-            val p = DnsProxy(pfd, upstream, prefs.blockMode, MTU) { onQuery(it) }
+            var relay: FullTunnel? = null
+            if (prefs.deepClean) {
+                val resolverIps = (HARDCODED_RESOLVERS + HARDCODED_RESOLVERS_V6 + DNS_ADDRESS_V4 + DNS_ADDRESS_V6)
+                    .mapNotNull { runCatching { java.net.InetAddress.getByName(it).address.toList() }.getOrNull() }.toHashSet()
+                relay = FullTunnel(
+                    protectTcp = { protect(it) },
+                    protectUdp = { protect(it) },
+                    writeToTun = { pkt -> proxy?.writePacket(pkt) },
+                    policy = object : FullTunnel.Policy {
+                        override fun resetTcp(dst: ByteArray, dstPort: Int): Boolean =
+                            (dstPort == 53 || dstPort == 853 || dstPort == 443) && dst.toList() in resolverIps
+                        override fun dropUdp(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean = false
+                    },
+                )
+                relayThread = Thread(relay, "relay").also { it.isDaemon = true }
+            }
+            val p = DnsProxy(pfd, upstream, prefs.blockMode, MTU, { onQuery(it) }, relay)
             proxy = p
+            relayThread?.start()
             isRunning = true
             isStarting = false
             lastError = null
@@ -203,11 +221,17 @@ class BlockerVpnService : VpnService() {
             .addAddress(TUN_ADDRESS_V6, 64)
             .addDnsServer(DNS_ADDRESS_V4)
             .addDnsServer(DNS_ADDRESS_V6)
-            .addRoute(DNS_ADDRESS_V4, 32)
-            .addRoute(DNS_ADDRESS_V6, 128)
             .setBlocking(true)
         builder.setMetered(false)
-        if (prefs.catchHardcodedResolvers) {
+        if (prefs.deepClean) {
+            // Everything goes through the userspace relay.
+            builder.addRoute("0.0.0.0", 0)
+            builder.addRoute("::", 0)
+        } else {
+            builder.addRoute(DNS_ADDRESS_V4, 32)
+            builder.addRoute(DNS_ADDRESS_V6, 128)
+        }
+        if (prefs.catchHardcodedResolvers && !prefs.deepClean) {
             for (ip in HARDCODED_RESOLVERS) runCatching { builder.addRoute(ip, 32) }
             for (ip in HARDCODED_RESOLVERS_V6) runCatching { builder.addRoute(ip, 128) }
         }

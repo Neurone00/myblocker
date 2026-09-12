@@ -11,19 +11,31 @@ class UdpDatagram(
     val payloadLength: Int,
 )
 
-/** A TCP SYN as seen on the TUN device; only what is needed to answer with RST. */
-class TcpSyn(
+/** A TCP segment as seen on the TUN device. */
+class TcpSegment(
     val version: Int,
     val src: ByteArray,
     val dst: ByteArray,
     val srcPort: Int,
     val dstPort: Int,
     val seq: Long,
-)
+    val ack: Long,
+    val flags: Int,
+    val window: Int,
+    /** MSS option from a SYN, or 0. */
+    val mss: Int,
+    val payloadOffset: Int,
+    val payloadLength: Int,
+) {
+    val syn: Boolean get() = flags and IpPackets.TCP_SYN != 0
+    val ackFlag: Boolean get() = flags and IpPackets.TCP_ACK != 0
+    val fin: Boolean get() = flags and IpPackets.TCP_FIN != 0
+    val rst: Boolean get() = flags and IpPackets.TCP_RST != 0
+}
 
 sealed class ParsedPacket {
     class Udp(val datagram: UdpDatagram) : ParsedPacket()
-    class Syn(val syn: TcpSyn) : ParsedPacket()
+    class Tcp(val segment: TcpSegment) : ParsedPacket()
     object Other : ParsedPacket()
 }
 
@@ -32,8 +44,13 @@ sealed class ParsedPacket {
  * TCP probe on port 53/853), so a full stack is not needed.
  */
 object IpPackets {
-    private const val PROTO_TCP = 6
-    private const val PROTO_UDP = 17
+    const val PROTO_TCP = 6
+    const val PROTO_UDP = 17
+    const val TCP_FIN = 0x01
+    const val TCP_SYN = 0x02
+    const val TCP_RST = 0x04
+    const val TCP_PSH = 0x08
+    const val TCP_ACK = 0x10
 
     fun parse(buf: ByteArray, len: Int): ParsedPacket {
         if (len < 20) return ParsedPacket.Other
@@ -80,12 +97,30 @@ object IpPackets {
             }
             PROTO_TCP -> {
                 if (off + 20 > end) return ParsedPacket.Other
-                val flags = buf[off + 13].toInt() and 0xff
-                val syn = flags and 0x02 != 0
-                val ack = flags and 0x10 != 0
-                if (!syn || ack) return ParsedPacket.Other
-                val seq = u32(buf, off + 4)
-                return ParsedPacket.Syn(TcpSyn(version, src, dst, u16(buf, off), u16(buf, off + 2), seq))
+                val dataOffset = ((buf[off + 12].toInt() and 0xf0) shr 4) * 4
+                if (dataOffset < 20 || off + dataOffset > end) return ParsedPacket.Other
+                val flags = buf[off + 13].toInt() and 0x3f
+                var mss = 0
+                if (flags and TCP_SYN != 0) {
+                    var o = off + 20
+                    val optEnd = off + dataOffset
+                    while (o < optEnd) {
+                        val kind = buf[o].toInt() and 0xff
+                        if (kind == 0) break
+                        if (kind == 1) { o++; continue }
+                        if (o + 1 >= optEnd) break
+                        val len = buf[o + 1].toInt() and 0xff
+                        if (len < 2 || o + len > optEnd) break
+                        if (kind == 2 && len == 4) mss = u16(buf, o + 2)
+                        o += len
+                    }
+                }
+                return ParsedPacket.Tcp(
+                    TcpSegment(
+                        version, src, dst, u16(buf, off), u16(buf, off + 2), u32(buf, off + 4), u32(buf, off + 8),
+                        flags, u16(buf, off + 14), mss, off + dataOffset, end - off - dataOffset,
+                    ),
+                )
             }
             else -> return ParsedPacket.Other
         }
@@ -105,19 +140,39 @@ object IpPackets {
         return wrapIp(req.version, req.dst, req.src, PROTO_UDP, udp)
     }
 
-    /** Builds a TCP RST/ACK answering [syn], so the peer fails fast instead of timing out. */
-    fun buildTcpRst(syn: TcpSyn): ByteArray {
-        val tcp = ByteArray(20)
-        put16(tcp, 0, syn.dstPort)
-        put16(tcp, 2, syn.srcPort)
-        put32(tcp, 4, 0) // seq
-        put32(tcp, 8, (syn.seq + 1) and 0xffffffffL) // ack
-        tcp[12] = (5 shl 4).toByte() // data offset 5 words
-        tcp[13] = 0x14 // RST + ACK
-        put16(tcp, 14, 0) // window
-        val sum = checksum(pseudoHeader(syn.version, syn.dst, syn.src, PROTO_TCP, 20), tcp, 20)
+    /** Builds a TCP RST/ACK answering [seg] (a SYN or any stray segment), so the peer fails fast. */
+    fun buildTcpRst(seg: TcpSegment): ByteArray {
+        val ackNum = (seg.seq + seg.payloadLength + (if (seg.syn) 1 else 0) + (if (seg.fin) 1 else 0)) and 0xffffffffL
+        val seqNum = if (seg.ackFlag) seg.ack else 0L
+        return buildTcp(seg.version, seg.dst, seg.src, seg.dstPort, seg.srcPort, seqNum, ackNum, TCP_RST or TCP_ACK, 0, null, 0, 0)
+    }
+
+    /**
+     * Builds a TCP segment from [src]:[srcPort] to [dst]:[dstPort]. [mss] > 0 adds an MSS option
+     * (only meaningful on SYN/ACK). [payload] may be null.
+     */
+    fun buildTcp(
+        version: Int, src: ByteArray, dst: ByteArray, srcPort: Int, dstPort: Int,
+        seq: Long, ack: Long, flags: Int, window: Int,
+        payload: ByteArray?, payloadOffset: Int, payloadLength: Int, mss: Int = 0,
+    ): ByteArray {
+        val headerLen = if (mss > 0) 24 else 20
+        val tcp = ByteArray(headerLen + payloadLength)
+        put16(tcp, 0, srcPort)
+        put16(tcp, 2, dstPort)
+        put32(tcp, 4, seq and 0xffffffffL)
+        put32(tcp, 8, ack and 0xffffffffL)
+        tcp[12] = ((headerLen / 4) shl 4).toByte()
+        tcp[13] = (flags and 0x3f).toByte()
+        put16(tcp, 14, window.coerceIn(0, 65535))
+        if (mss > 0) {
+            tcp[20] = 2; tcp[21] = 4
+            put16(tcp, 22, mss)
+        }
+        if (payload != null && payloadLength > 0) System.arraycopy(payload, payloadOffset, tcp, headerLen, payloadLength)
+        val sum = checksum(pseudoHeader(version, src, dst, PROTO_TCP, tcp.size), tcp, tcp.size)
         put16(tcp, 16, sum)
-        return wrapIp(syn.version, syn.dst, syn.src, PROTO_TCP, tcp)
+        return wrapIp(version, src, dst, PROTO_TCP, tcp)
     }
 
     private fun wrapIp(version: Int, src: ByteArray, dst: ByteArray, proto: Int, transport: ByteArray): ByteArray {
