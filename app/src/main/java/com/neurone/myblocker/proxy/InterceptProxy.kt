@@ -113,10 +113,14 @@ class InterceptProxy(
             }
         } catch (e: Exception) {
             Log.d(TAG, "connection ended: ${e.javaClass.simpleName} ${e.message}")
+            errorListener?.invoke(e)
         } finally {
             runCatching { client.close() }
         }
     }
+
+    /** Diagnostics hook (tests): called with any exception that ends a connection. */
+    @Volatile var errorListener: ((Throwable) -> Unit)? = null
 
     // ------------------------------------------------------------- upstream
 

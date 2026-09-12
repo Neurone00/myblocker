@@ -123,6 +123,12 @@ class InterceptEndToEndTest {
         rulesFile.writeText("[Adblock Plus 2.0]\n##.ad-banner\nlocalhost##.sponsored\n")
         val rules = CosmeticRules.parse(rulesFile)
         val proxy = InterceptProxy(ca, protect = { true }, rules = { rules })
+        val proxyErrors = java.util.Collections.synchronizedList(ArrayList<String>())
+        proxy.errorListener = { e ->
+            val sw = java.io.StringWriter()
+            e.printStackTrace(java.io.PrintWriter(sw))
+            proxyErrors.add(sw.toString())
+        }
         proxy.start()
         val originAddr = InetAddress.getLoopbackAddress().address
 
@@ -132,7 +138,12 @@ class InterceptEndToEndTest {
             proxy.register(plain.localPort, dst, dstPort)
             plain.connect(InetSocketAddress(InetAddress.getLoopbackAddress(), proxy.port), 5000)
             val ssl = trust.socketFactory.createSocket(plain, host, dstPort, true) as SSLSocket
-            ssl.startHandshake()
+            try {
+                ssl.startHandshake()
+            } catch (e: Exception) {
+                Thread.sleep(200)
+                throw AssertionError("handshake with proxy failed: $e; proxy errors: ${proxyErrors.joinToString("\n---\n")}", e)
+            }
             // The minted certificate must be for the requested host and chain to our CA.
             val peer = ssl.session.peerCertificates[0] as java.security.cert.X509Certificate
             assertTrue(peer.subjectX500Principal.name.contains("CN=$host"))
