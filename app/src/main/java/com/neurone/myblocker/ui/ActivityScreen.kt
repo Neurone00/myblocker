@@ -94,7 +94,7 @@ fun ActivityScreen() {
             )
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
-            items(entries, key = { "${it.time}-${it.host}-${it.type}" }) { e ->
+            items(entries, key = { it.id }) { e ->
                 val app = e.app?.let { appNames.labelFor(it) } ?: "Unknown app"
                 Row(
                     Modifier.fillMaxWidth().clickable { selected = e }.padding(vertical = 10.dp),

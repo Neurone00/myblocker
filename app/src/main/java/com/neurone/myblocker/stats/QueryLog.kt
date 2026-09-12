@@ -10,7 +10,11 @@ class LogEntry(
     val reason: Reason,
     val rule: String?,
     val app: String?,
-)
+) {
+    /** Unique, monotonically increasing; assigned by [QueryLog.add]. */
+    var id: Long = 0
+        internal set
+}
 
 /** In-memory ring buffer of recent DNS lookups for the Query Log screen. */
 object QueryLog {
@@ -20,7 +24,10 @@ object QueryLog {
     @Volatile var version: Long = 0
         private set
 
+    private var nextId = 1L
+
     @Synchronized fun add(e: LogEntry) {
+        e.id = nextId++
         if (entries.size >= CAPACITY) entries.removeFirst()
         entries.addLast(e)
         version++
