@@ -45,7 +45,8 @@ class BlockerVpnService : VpnService() {
     @Volatile private var generation = 0
     private var carConnection: com.neurone.myblocker.system.CarConnection? = null
     private var carReceiver: android.content.BroadcastReceiver? = null
-    @Volatile private var carBtConnected = false
+    /** Live car signals holding protection down (bt car kit, car mode, USB accessory, projection); non-empty ⇒ paused. */
+    private val carReasons = java.util.Collections.synchronizedSet(HashSet<String>())
     /** True while protection is held down because the phone is connected to a car (Android Auto rejects any VPN). */
     @Volatile private var pausedForCar = false
     private lateinit var appNames: AppNames
@@ -77,12 +78,18 @@ class BlockerVpnService : VpnService() {
         val r = object : android.content.BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
                 when (intent.action) {
-                    android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED ->
-                        if (isCarBluetooth(intent)) { carBtConnected = true; handler.post { onCarState(true) } }
-                    android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED ->
-                        if (isCarBluetooth(intent)) { carBtConnected = false; handler.post { onCarState(false) } }
-                    android.app.UiModeManager.ACTION_ENTER_CAR_MODE -> handler.post { onCarState(true) }
-                    android.app.UiModeManager.ACTION_EXIT_CAR_MODE -> if (!carBtConnected) handler.post { onCarState(false) }
+                    android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED -> if (isCarBluetooth(intent)) onCarSignal("bt", true)
+                    android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED -> if (isCarBluetooth(intent)) onCarSignal("bt", false)
+                    android.app.UiModeManager.ACTION_ENTER_CAR_MODE -> onCarSignal("carmode", true)
+                    android.app.UiModeManager.ACTION_EXIT_CAR_MODE -> onCarSignal("carmode", false)
+                    USB_STATE -> {
+                        // Wired Android Auto puts the phone in USB accessory mode; a plain charger does not.
+                        val connected = intent.getBooleanExtra("connected", false)
+                        val accessory = intent.getBooleanExtra(USB_ACCESSORY_EXTRA, false)
+                        onCarSignal("usb", connected && accessory)
+                    }
+                    android.hardware.usb.UsbManager.ACTION_USB_ACCESSORY_ATTACHED -> onCarSignal("usb", true)
+                    android.hardware.usb.UsbManager.ACTION_USB_ACCESSORY_DETACHED -> onCarSignal("usb", false)
                 }
             }
         }
@@ -91,18 +98,63 @@ class BlockerVpnService : VpnService() {
             addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED)
             addAction(android.app.UiModeManager.ACTION_ENTER_CAR_MODE)
             addAction(android.app.UiModeManager.ACTION_EXIT_CAR_MODE)
+            addAction(USB_STATE)
+            addAction(android.hardware.usb.UsbManager.ACTION_USB_ACCESSORY_ATTACHED)
+            addAction(android.hardware.usb.UsbManager.ACTION_USB_ACCESSORY_DETACHED)
         }
         runCatching { registerReceiver(r, filter) }
         carReceiver = r
-        // Projection state is a late but reliable extra resume signal.
+        // Projection state is a late but reliable extra signal (reports both connect and disconnect).
         carConnection = com.neurone.myblocker.system.CarConnection(this) { projecting ->
-            if (projecting) handler.post { onCarState(true) }
+            handler.post { onCarSignal("projection", projecting) }
         }
         carConnection?.start()
-        // If we are already connected to the car (service started mid-drive), pause now.
-        if (isCarBluetoothConnectedNow() || com.neurone.myblocker.system.CarConnection.isProjecting(this)) {
-            carBtConnected = true
-            handler.post { onCarState(true) }
+        // If we are already in the car when the service starts (mid-drive), pause now.
+        if (isCarBluetoothConnectedNow()) onCarSignal("bt", true)
+        if (isUsbAccessoryNow()) onCarSignal("usb", true)
+        if (com.neurone.myblocker.system.CarConnection.isProjecting(this)) onCarSignal("projection", true)
+    }
+
+    /** Any live car signal (Bluetooth car kit, car mode, USB accessory, projection) holds protection down. */
+    private fun onCarSignal(reason: String, present: Boolean) {
+        if (!Prefs.get(this).pauseForAndroidAuto) return
+        val changed = if (present) carReasons.add(reason) else carReasons.remove(reason)
+        if (!changed) return
+        applyCarPause(carReasons.isNotEmpty())
+    }
+
+    private fun applyCarPause(wantPaused: Boolean) {
+        if (wantPaused && !pausedForCar) {
+            pausedForCar = true
+            state = "Paused for Android Auto"
+            Log.i(TAG, "car connected: pausing protection (${carReasons.joinToString()})")
+            stopRequested = true
+            proxy?.stop()
+            runCatching { tun?.close() }
+            tun = null
+            isRunning = false
+            isStarting = false
+            broadcastState()
+            runCatching { Notifications.updateRunning(this) }
+        } else if (!wantPaused && pausedForCar) {
+            pausedForCar = false
+            Log.i(TAG, "car disconnected: resuming protection")
+            if (Prefs.get(this).wantsProtection) {
+                stopRequested = false
+                startForegroundCompat()
+                startVpn()
+            }
+        }
+    }
+
+    private fun isUsbAccessoryNow(): Boolean {
+        return try {
+            val sticky = registerReceiver(null, android.content.IntentFilter(USB_STATE))
+            val connected = sticky?.getBooleanExtra("connected", false) ?: false
+            val accessory = sticky?.getBooleanExtra(USB_ACCESSORY_EXTRA, false) ?: false
+            connected && accessory
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -155,32 +207,6 @@ class BlockerVpnService : VpnService() {
                 bm.getConnectedDevices(android.bluetooth.BluetoothProfile.HEADSET).contains(device)
         } catch (e: Exception) {
             false
-        }
-    }
-
-    /** Android Auto rejects any active VPN, so hold protection down while it projects and restore after. */
-    private fun onCarState(projecting: Boolean) {
-        if (!Prefs.get(this).pauseForAndroidAuto) return
-        if (projecting && !pausedForCar) {
-            pausedForCar = true
-            state = "Paused for Android Auto"
-            Log.i(TAG, "Android Auto connected: pausing protection")
-            stopRequested = true
-            proxy?.stop()
-            runCatching { tun?.close() }
-            tun = null
-            isRunning = false
-            isStarting = false
-            broadcastState()
-            runCatching { Notifications.updateRunning(this) }
-        } else if (!projecting && pausedForCar) {
-            pausedForCar = false
-            Log.i(TAG, "Android Auto disconnected: resuming protection")
-            if (Prefs.get(this).wantsProtection) {
-                stopRequested = false
-                startForegroundCompat()
-                startVpn()
-            }
         }
     }
 
@@ -468,6 +494,10 @@ class BlockerVpnService : VpnService() {
 
     companion object {
         private const val TAG = "BlockerVpnService"
+        /** Sticky broadcast Android sends for USB data-role changes; carries "connected" and the accessory flag. */
+        private const val USB_STATE = "android.hardware.usb.action.USB_STATE"
+        /** Extra key in USB_STATE set when the phone is in accessory mode (UsbManager.USB_FUNCTION_ACCESSORY is @hide). */
+        private const val USB_ACCESSORY_EXTRA = "accessory"
         const val ACTION_START = "com.neurone.myblocker.START"
         const val ACTION_STOP = "com.neurone.myblocker.STOP"
         const val ACTION_RESTART = "com.neurone.myblocker.RESTART"

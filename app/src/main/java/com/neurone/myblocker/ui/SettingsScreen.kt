@@ -66,7 +66,7 @@ fun SettingsScreen(nav: Navigator) {
             RowDivider()
             SwitchRow(
                 "Pause for Android Auto",
-                "Android Auto refuses to start with any VPN active. Adbrella pauses itself the moment your phone connects to the car (Bluetooth or car mode) and resumes when you disconnect. Needs the Nearby devices permission to recognise the car.",
+                "Android Auto refuses to start with any VPN active. Adbrella pauses itself the moment your phone connects to the car — over Bluetooth, car mode, or the USB cable — and resumes when you disconnect. Needs the Nearby devices permission to recognise the car.",
                 remember(changes) { prefs.pauseForAndroidAuto },
             ) { prefs.pauseForAndroidAuto = it }
         }
@@ -269,9 +269,8 @@ fun AboutScreen(nav: Navigator) {
         )
         AboutSection(
             "Android Auto",
-            "Android Auto refuses to start whenever any VPN is active (\"communication error 21\"), and it checks before it ever reports being connected, so waiting for it to connect is too late. Adbrella instead pauses the moment your phone joins the car over Bluetooth (or enters car mode), which happens before Android Auto starts, and resumes when you leave. Grant the Nearby devices permission so it can tell the car apart from headphones.",
+            "Android Auto refuses to start whenever any VPN is active (\"communication error 21\"), and it checks before it ever reports being connected, so waiting for it to connect is too late. Adbrella instead pauses the moment your phone joins the car — over Bluetooth, in car mode, or through the USB cable (wired Android Auto puts the phone in USB accessory mode, which a plain charger does not) — all of which happen before Android Auto starts, and resumes when you leave. Grant the Nearby devices permission so it can tell the car apart from headphones.",
             "If you use Always-on VPN, keep \"Block connections without VPN\" off, otherwise the phone has no network while paused and Android Auto still cannot connect.",
-            "Wired-only Android Auto with no Bluetooth link to the car is the one case this cannot detect; there, toggle the umbrella off before plugging in.",
         )
         AboutSection(
             "Privacy",
