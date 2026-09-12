@@ -11,6 +11,7 @@ import com.neurone.myblocker.Prefs
 import com.neurone.myblocker.filter.FilterEngine
 import com.neurone.myblocker.filter.ListRepository
 import com.neurone.myblocker.update.Updater
+import com.neurone.myblocker.web.WebFilters
 import kotlinx.coroutines.runBlocking
 
 /** Periodic blocklist refresh (every 12 hours, any network). */
@@ -27,6 +28,10 @@ class ListUpdateJobService : JobService() {
                 Log.i(TAG, "list update: $results")
                 if (results.values.any { it == null }) FilterEngine.reload(this)
                 reschedule = results.values.any { it != null }
+                if (prefs.autoUpdateLists) {
+                    val webError = WebFilters.refresh(this)
+                    if (webError != null) reschedule = true
+                }
                 if (prefs.autoUpdateApp) {
                     runBlocking {
                         val info = Updater.check(this@ListUpdateJobService, manual = false)

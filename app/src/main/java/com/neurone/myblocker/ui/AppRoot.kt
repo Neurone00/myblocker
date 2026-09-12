@@ -31,7 +31,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 /** Secondary screens pushed on top of a tab. */
-enum class Screen { Strength, Apps, KeepRunning, Advanced, Lists, Rules, Upstream, About }
+enum class Screen { Strength, Apps, KeepRunning, Advanced, Lists, Rules, Upstream, About, Web }
 
 class Navigator(val push: (Screen) -> Unit, val pop: () -> Unit, val goTab: (Tab) -> Unit)
 
@@ -74,6 +74,7 @@ fun AppRoot() {
                 Screen.Rules -> RulesScreen(nav)
                 Screen.Upstream -> UpstreamScreen(nav)
                 Screen.About -> AboutScreen(nav)
+                Screen.Web -> WebScreen(nav)
             }
         }
     }

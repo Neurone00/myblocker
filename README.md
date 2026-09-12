@@ -30,6 +30,7 @@ The version scheme is `1.0.0-b<build number>`; the build number is also the Andr
 - **Consumer-facing UI** (Jetpack Compose, Material 3): follows your wallpaper colors on Android 12+ (One UI "Color palette"), four tabs (Umbrella, Activity, Stats, Settings). All technical controls sit under **Settings › Advanced**. A short umbrella splash on launch, then the brand stays out of the way.
 - **Self-updating** from the rolling GitHub release (see above).
 - **Catches hard-coded resolvers**: public resolver IPs (8.8.8.8, 1.1.1.1, 9.9.9.9, …) are routed into the tunnel too, so apps that skip the system DNS are still filtered; their DNS-over-TLS/HTTPS attempts get a TCP reset so they fall back to plain DNS.
+- **Tidy web pages**: Adbrella registers as a **Samsung Internet content blocker** (the same extension API AdGuard Content Blocker and Adblock Plus use) and supplies EasyList, whose element-hiding rules remove the empty ad boxes DNS blocking leaves behind and let pages reflow. One-time step: Samsung Internet › Settings › Extensions › Content blockers › switch on Adbrella (Settings › Tidy web pages opens that page). Chrome has no extension support; Firefox + uBlock Origin is the alternative.
 - **Protection strength**: Light, Balanced, Strong (default) or Custom, each a preset of lists. Any list can be toggled individually.
 - **Lists**: curated mobile ad-SDK list (AdMob, Unity Ads, AppLovin, ironSource, Vungle, Chartboost, InMobi, Meta Audience Network, Mintegral, Pangle, …), HaGeZi Light / Pro / Pro++, Samsung telemetry, TikTok tracking, StevenBlack, AdAway, plus any URL you add (hosts, plain domain or `||domain^` format). HaGeZi Pro, Light, Samsung and TikTok ship inside the APK so protection works offline immediately; all lists refresh every 12 hours.
 - **Does not break apps**: blocked names fail instantly (null IP, Pi-hole style) instead of timing out; a built-in safety allowlist keeps Play, push notifications, connectivity checks and Samsung account reachable; the **Activity** tab shows every lookup with the app that made it and lets you allow a domain with one tap; **Apps that skip the umbrella** exempts stubborn apps entirely.
@@ -58,6 +59,7 @@ app/src/main/java/com/neurone/myblocker/
   stats/     StatsStore (JSON persisted), QueryLog, Levels, Achievements, AppNames
   system/    Notifications, BootReceiver, BlockerTileService, ListUpdateJobService
   update/    Updater (manifest check, download, SHA-256 verify, PackageInstaller) + InstallReceiver
+  web/       WebFilters (EasyList refresh, Samsung Internet notify) + WebFilterProvider (content-blocker provider)
   ui/        Compose: Theme, Splash, AppRoot, Home, Activity, Stats, Settings, Advanced, Lists, Rules, Upstream, Apps
 app/src/main/assets/lists/   bundled blocklists (gzip) + mobile_ads.txt (curated)
 app/src/test/                unit tests for the DNS codec, IP codec, list parser, levels
@@ -89,4 +91,4 @@ The activity log lives in memory and is gone when the service stops. Statistics 
 
 ## Credits
 
-Blocklists by [HaGeZi](https://github.com/hagezi/dns-blocklists), [StevenBlack](https://github.com/StevenBlack/hosts) and [AdAway](https://github.com/AdAway/adaway.github.io). The DNS-only VPN approach follows DNS66, personalDNSfilter and RethinkDNS. The Adbrella name, icon, palette, self-updater and resolver capture come from the sibling Adbrella prototype in Neurone00/Carshare.
+Web rules by [EasyList](https://easylist.to/). Blocklists by [HaGeZi](https://github.com/hagezi/dns-blocklists), [StevenBlack](https://github.com/StevenBlack/hosts) and [AdAway](https://github.com/AdAway/adaway.github.io). The DNS-only VPN approach follows DNS66, personalDNSfilter and RethinkDNS. The Adbrella name, icon, palette, self-updater and resolver capture come from the sibling Adbrella prototype in Neurone00/Carshare.

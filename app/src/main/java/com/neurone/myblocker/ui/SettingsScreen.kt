@@ -54,6 +54,8 @@ fun SettingsScreen(nav: Navigator) {
             )
             RowDivider()
             SettingRow("Apps that skip the umbrella", if (bypass == 0) "None" else "$bypass app${if (bypass == 1) "" else "s"}", onClick = { nav.push(Screen.Apps) })
+            RowDivider()
+            SettingRow("Tidy web pages", "Remove empty ad boxes in Samsung Internet", onClick = { nav.push(Screen.Web) })
         }
         SectionCard {
             SettingRow("Keep the umbrella open", "$setupDone of 3 phone settings done", onClick = { nav.push(Screen.KeepRunning) })
@@ -210,6 +212,11 @@ fun AboutScreen(nav: Navigator) {
             "Sponsored posts inside Facebook, Instagram, X and Reddit feeds: they arrive inside the normal API responses.",
             "Rewarded ads (\"watch an ad to get X\") will simply report \"no ad available\".",
             "Apps that hard-code IP addresses or ship their own encrypted DNS (Adbrella catches the common public resolvers).",
+        )
+        AboutSection(
+            "Web pages",
+            "DNS blocking stops the ad from loading but leaves its empty box behind. Settings › Tidy web pages plugs Adbrella into Samsung Internet as a content blocker with EasyList, which also hides those boxes and reflows the page.",
+            "Chrome has no extension support on Android, so it cannot do this. Samsung Internet (installed on your phone) or Firefox with uBlock Origin can.",
         )
         AboutSection(
             "If an app breaks",
