@@ -6,9 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.MediaStore
 import android.provider.Settings
-import android.security.KeyChain
 import android.util.Log
-import androidx.core.content.FileProvider
 import java.io.File
 import java.security.KeyStore
 import java.security.cert.X509Certificate
@@ -107,40 +105,6 @@ object CaInstall {
     }
 
     /** Opens Android's security settings, where "Install from device storage" lives. */
-    /**
-     * Hands the certificate straight to Android's installer. The mime type says "CA certificate",
-     * which is what puts it in the trust store browsers read rather than the VPN/app credential
-     * slot. Falls back to the KeyChain install intent, then to the Settings screen, and reports
-     * which route opened so the UI can say what to expect. Returns null if nothing could be opened.
-     */
-    fun installNow(context: Context): String? {
-        val pem = runCatching {
-            val ca = get(context)
-            val f = File(dir(context), FILE_NAME)
-            f.parentFile?.mkdirs()
-            f.writeText(CertAuthority.pem(ca.caCert))
-            FileProvider.getUriForFile(context, "${context.packageName}.files", f)
-        }.getOrNull()
-
-        if (pem != null) {
-            val view = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(pem, "application/x-x509-ca-cert")
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (runCatching { context.startActivity(view) }.isSuccess) return "installer"
-        }
-
-        val keychain = runCatching {
-            KeyChain.createInstallIntent().apply {
-                putExtra(KeyChain.EXTRA_CERTIFICATE, get(context).caCert.encoded)
-                putExtra(KeyChain.EXTRA_NAME, "Adbrella")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-        }.getOrNull()
-        if (keychain != null && runCatching { context.startActivity(keychain) }.isSuccess) return "keychain"
-
-        return if (openSecuritySettings(context)) "settings" else null
-    }
-
     fun openSecuritySettings(context: Context): Boolean {
         val candidates = listOf(
             Intent("android.settings.SECURITY_SETTINGS"),

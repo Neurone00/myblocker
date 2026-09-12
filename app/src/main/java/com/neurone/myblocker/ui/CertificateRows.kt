@@ -74,7 +74,7 @@ fun CertificateRows() {
                         android.os.Handler(android.os.Looper.getMainLooper()).post {
                             busy = false
                             refresh++
-                            hint = when (CaInstall.installNow(context)) {
+                            hint = when (installCertificateNow(context)) {
                                 "installer" -> "Android is asking to install it now. If it offers a choice of what to use it for, pick CA certificate, then confirm the warning."
                                 "keychain" -> "Name it Adbrella and confirm. If it asks what to use it for, pick CA certificate."
                                 "settings" -> "Settings is open: Other security settings › Install from device storage › CA certificate › pick ${CaInstall.FILE_NAME} (save it to Downloads first, below)."
