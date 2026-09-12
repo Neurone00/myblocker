@@ -26,10 +26,21 @@ import java.security.MessageDigest
  */
 object Updater {
     private const val TAG = "Updater"
-    const val MANIFEST_URL = "https://github.com/Neurone00/myblocker/releases/download/adbrella-latest/update.json"
+    const val REPO = "Neurone00/myblocker"
+    const val RELEASE_TAG = "adbrella-latest"
+    const val MANIFEST_URL = "https://github.com/$REPO/releases/download/$RELEASE_TAG/update.json"
+    private const val API_RELEASE_URL = "https://api.github.com/repos/$REPO/releases/tags/$RELEASE_TAG"
     private const val CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000L
 
-    data class Info(val versionCode: Long, val versionName: String, val apkUrl: String, val sha256: String, val size: Long)
+    /** [apkUrl] is the public download URL; [apkAssetUrl] the API asset URL used when a token is configured. */
+    data class Info(
+        val versionCode: Long,
+        val versionName: String,
+        val apkUrl: String,
+        val sha256: String,
+        val size: Long,
+        val apkAssetUrl: String? = null,
+    )
 
     sealed class State {
         data object Idle : State()
@@ -60,13 +71,33 @@ object Updater {
         }
         state.value = State.Checking
         try {
-            val json = JSONObject(fetch(MANIFEST_URL, 512 * 1024).toString(Charsets.UTF_8))
+            val token = prefs.githubToken
+            val json: JSONObject
+            var apkAssetUrl: String? = null
+            if (token.isEmpty()) {
+                json = JSONObject(fetch(MANIFEST_URL, 512 * 1024, null).toString(Charsets.UTF_8))
+            } else {
+                // Private repository: list the release through the API, then read the manifest asset.
+                val release = JSONObject(fetch(API_RELEASE_URL, 1024 * 1024, token, api = true).toString(Charsets.UTF_8))
+                val assets = release.getJSONArray("assets")
+                var manifestUrl: String? = null
+                for (i in 0 until assets.length()) {
+                    val a = assets.getJSONObject(i)
+                    when (a.getString("name")) {
+                        "update.json" -> manifestUrl = a.getString("url")
+                        "adbrella.apk" -> apkAssetUrl = a.getString("url")
+                    }
+                }
+                if (manifestUrl == null) throw IOException("update.json missing from the release")
+                json = JSONObject(fetch(manifestUrl, 512 * 1024, token, octet = true).toString(Charsets.UTF_8))
+            }
             val info = Info(
                 versionCode = json.getLong("versionCode"),
                 versionName = json.getString("versionName"),
                 apkUrl = json.getString("apkUrl"),
                 sha256 = json.getString("sha256").lowercase(),
                 size = json.optLong("size", -1),
+                apkAssetUrl = apkAssetUrl,
             )
             prefs.lastUpdateCheck = now
             if (info.versionCode > currentVersionCode(context)) {
@@ -78,7 +109,13 @@ object Updater {
             }
         } catch (e: Exception) {
             Log.w(TAG, "update check failed", e)
-            state.value = State.Error("Could not check for updates: ${e.message ?: e.javaClass.simpleName}")
+            val msg = e.message ?: e.javaClass.simpleName
+            val hint = when {
+                msg.contains("404") && prefs.githubToken.isEmpty() -> " The GitHub repository is private: add a read-only token below or make the repo public."
+                msg.contains("401") || msg.contains("403") -> " The token was rejected; it needs Contents: read on $REPO."
+                else -> ""
+            }
+            state.value = State.Error("Could not check for updates ($msg).$hint")
             null
         }
     }
@@ -91,7 +128,9 @@ object Updater {
         try {
             if (!(apk.exists() && sha256(apk) == info.sha256)) {
                 state.value = State.Downloading(info, 0)
-                download(info.apkUrl, apk, info.size) { pct -> state.value = State.Downloading(info, pct) }
+                val token = Prefs.get(ctx).githubToken
+                val url = if (token.isNotEmpty() && info.apkAssetUrl != null) info.apkAssetUrl else info.apkUrl
+                download(url, apk, info.size, if (token.isNotEmpty()) token else null) { pct -> state.value = State.Downloading(info, pct) }
                 val digest = sha256(apk)
                 if (digest != info.sha256) {
                     apk.delete()
@@ -127,8 +166,8 @@ object Updater {
         }
     }
 
-    private fun fetch(url: String, maxBytes: Int): ByteArray {
-        val conn = open(url)
+    private fun fetch(url: String, maxBytes: Int, token: String?, api: Boolean = false, octet: Boolean = false): ByteArray {
+        val conn = open(url, token, if (api) "application/vnd.github+json" else if (octet) "application/octet-stream" else "*/*")
         try {
             if (conn.responseCode != 200) throw IOException("HTTP ${conn.responseCode}")
             return conn.inputStream.use { it.readNBytes(maxBytes) }
@@ -137,8 +176,8 @@ object Updater {
         }
     }
 
-    private fun download(url: String, dest: File, expectedSize: Long, progress: (Int) -> Unit) {
-        val conn = open(url)
+    private fun download(url: String, dest: File, expectedSize: Long, token: String?, progress: (Int) -> Unit) {
+        val conn = open(url, token, "application/octet-stream")
         try {
             if (conn.responseCode != 200) throw IOException("HTTP ${conn.responseCode}")
             val total = if (expectedSize > 0) expectedSize else conn.contentLengthLong
@@ -172,16 +211,24 @@ object Updater {
         }
     }
 
-    /** GitHub release assets redirect to a CDN host; follow redirects across hosts manually. */
-    private fun open(url: String): HttpURLConnection {
+    /**
+     * GitHub redirects asset downloads to a signed CDN URL; follow redirects manually and never
+     * forward the token to another host (the CDN rejects requests that carry it).
+     */
+    private fun open(url: String, token: String?, accept: String): HttpURLConnection {
         var current = url
+        val origin = URL(url).host
         repeat(6) {
             val conn = URL(current).openConnection() as HttpURLConnection
             conn.connectTimeout = 15_000
             conn.readTimeout = 60_000
             conn.instanceFollowRedirects = false
             conn.setRequestProperty("User-Agent", "Adbrella-Updater")
-            conn.setRequestProperty("Accept", "*/*")
+            conn.setRequestProperty("Accept", accept)
+            if (!token.isNullOrEmpty() && URL(current).host == origin) {
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            }
             val code = conn.responseCode
             if (code in 300..399) {
                 val loc = conn.getHeaderField("Location") ?: throw IOException("redirect without location")

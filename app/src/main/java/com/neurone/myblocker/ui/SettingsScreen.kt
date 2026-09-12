@@ -38,6 +38,7 @@ fun SettingsScreen(nav: Navigator) {
     val level = remember(changes) { prefs.level }
     val bypass = remember(changes) { prefs.bypassApps.size }
     val setupDone = remember(tick, changes) { SetupChecks.items(context).count { it.done } }
+    var tokenDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Page(title = "Settings") {
         SectionCard {
@@ -95,6 +96,13 @@ fun SettingsScreen(nav: Navigator) {
                 )
             }
             RowDivider()
+            val token = remember(changes) { prefs.githubToken }
+            SettingRow(
+                "Private repository token",
+                if (token.isEmpty()) "Only needed while the GitHub repo is private. Tap to add a read-only token." else "Set (${token.take(8)}…). Tap to change or clear.",
+                onClick = { tokenDialog = true },
+            )
+            RowDivider()
             SwitchRow("Badge notifications", "A nudge when you earn one", remember(changes) { prefs.achievementNotifications }) { prefs.achievementNotifications = it }
         }
         SectionCard {
@@ -106,6 +114,35 @@ fun SettingsScreen(nav: Navigator) {
             "Adbrella ${BuildConfig.VERSION_NAME} (${BuildConfig.GIT_SHA})",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),
+        )
+    }
+
+    if (tokenDialog) {
+        var value by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(prefs.githubToken) }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { tokenDialog = false },
+            title = { Text("Private repository token") },
+            text = {
+                Column {
+                    Text(
+                        "GitHub refuses anonymous downloads from a private repository. Create a fine-grained personal access token on github.com (Settings › Developer settings › Fine-grained tokens) limited to the ${Updater.REPO} repository with Contents: Read-only, and paste it here. Leave empty if the repository is public.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    androidx.compose.material3.OutlinedTextField(
+                        value = value, onValueChange = { value = it }, singleLine = true,
+                        label = { Text("github_pat_…") }, modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    prefs.githubToken = value
+                    prefs.lastUpdateCheck = 0
+                    tokenDialog = false
+                    scope.launch { Updater.check(context, manual = true) }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { tokenDialog = false }) { Text("Cancel") } },
         )
     }
 }

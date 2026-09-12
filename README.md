@@ -13,6 +13,8 @@ Every push builds a signed APK on GitHub Actions and publishes it twice:
 
 Install once from either. From then on **the app updates itself**: it checks `update.json` on launch (at most every 6 hours) and once a day in the background, downloads the APK, verifies its SHA-256 and installs it through PackageInstaller. Android asks you to confirm the first self-update; afterwards updates apply silently on Android 12+. Toggle it under Settings › Update automatically.
 
+**Private repository?** GitHub returns 404 for anonymous downloads of a private repo's release assets, so self-update (and the Releases links above) only work if the repo is public **or** you give the app a token: create a fine-grained personal access token limited to this repository with *Contents: Read-only* and paste it under Settings › Private repository token. The app then uses GitHub's API for the check and the download; the token never leaves the phone.
+
 The version scheme is `1.0.0-b<build number>`; the build number is also the Android `versionCode`, so newer always installs over older.
 
 ## First run on the S23

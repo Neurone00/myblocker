@@ -124,6 +124,11 @@ class Prefs private constructor(context: Context) {
         get() = sp.getLong(KEY_LAST_UPDATE_CHECK, 0L)
         set(v) = sp.edit().putLong(KEY_LAST_UPDATE_CHECK, v).apply()
 
+    /** Optional fine-grained GitHub token (Contents: read) so updates work while the repo is private. */
+    var githubToken: String
+        get() = sp.getString(KEY_GITHUB_TOKEN, "") ?: ""
+        set(v) = sp.edit().putString(KEY_GITHUB_TOKEN, v.trim()).apply()
+
     var webFiltersUpdated: Long
         get() = sp.getLong(KEY_WEB_UPDATED, 0L)
         set(v) = sp.edit().putLong(KEY_WEB_UPDATED, v).apply()
@@ -178,6 +183,7 @@ class Prefs private constructor(context: Context) {
         private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
         private const val KEY_ALWAYS_ON_ACK = "always_on_ack"
         private const val KEY_WEB_UPDATED = "web_updated"
+        private const val KEY_GITHUB_TOKEN = "github_token"
         private const val KEY_WEB_RULES = "web_rules"
 
         @Volatile private var instance: Prefs? = null
