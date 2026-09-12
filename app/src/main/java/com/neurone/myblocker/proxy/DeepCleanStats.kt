@@ -27,11 +27,15 @@ object DeepCleanStats {
     /** Browser TLS handshakes that failed, almost always because the certificate is not installed. */
     @Volatile var handshakeFailures: Long = 0
 
+    /** Sites interception went wrong on, now tunnelled raw so browsing works there regardless. */
+    @Volatile var givenUp: Int = 0
+
     fun reset() {
         connections = 0
         pagesTidied = 0
         passthroughs = 0
         quicDropped = 0
         handshakeFailures = 0
+        givenUp = 0
     }
 }

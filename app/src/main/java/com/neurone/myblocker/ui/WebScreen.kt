@@ -49,6 +49,7 @@ fun WebScreen(nav: Navigator) {
     val conns = remember(tick) { ds.connections }
     val quic = remember(tick) { ds.quicDropped }
     val refused = remember(tick) { ds.handshakeFailures }
+    val givenUp = remember(tick) { ds.givenUp }
     val deepClean = remember(changes) { prefs.deepClean }
     val tidyOn = remember(changes) { prefs.interceptBrowsers }
     val certInstalled = remember(tick) { CaInstall.isInstalled(context) }
@@ -68,6 +69,13 @@ fun WebScreen(nav: Navigator) {
                     },
                     style = MaterialTheme.typography.bodyLarge,
                 )
+                if (givenUp > 0) {
+                    Text(
+                        "$givenUp site(s) would not work through tidying, so they are passed through untouched. Browsing there is normal; only their ad boxes stay.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
                 Text(
                     "Browser connections seen: ${fmt(conns)} · pages tidied: ${fmt(pages)} · QUIC forced to TCP: ${fmt(quic)}",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,

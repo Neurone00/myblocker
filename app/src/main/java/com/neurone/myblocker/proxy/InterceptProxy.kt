@@ -124,7 +124,16 @@ class InterceptProxy(
                 } catch (e: Exception) {
                     // The browser refused our certificate (not installed / not trusted) or dropped the
                     // handshake; counted so the status screen can say so instead of silently showing 0 pages.
-                    if (!internal) { handshakeFailures++; DeepCleanStats.handshakeFailures = handshakeFailures }
+                    if (!internal) {
+                        handshakeFailures++
+                        DeepCleanStats.handshakeFailures = handshakeFailures
+                        // Pass this site through untouched next time, so a reload works even if
+                        // tidying never can here.
+                        if (hello.sni != null) {
+                            troubled.add(host.lowercase().trimEnd('.'))
+                            DeepCleanStats.givenUp = troubled.size
+                        }
+                    }
                     throw e
                 }
                 if (internal) serveInternal(ssl.getInputStream(), ssl.getOutputStream(), tls = true)
@@ -151,8 +160,19 @@ class InterceptProxy(
     @Volatile var passthroughs: Long = 0; private set
     @Volatile var handshakeFailures: Long = 0; private set
 
+    /**
+     * Hosts that went wrong under interception (the browser refused our certificate, or the origin's
+     * TLS would not negotiate) and are tunnelled raw from then on. Browsing must never stay broken
+     * because tidying cannot handle a site, so the first failure is the last one it costs.
+     */
+    private val troubled = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /** Sites given up on and passed through raw since the tunnel started; shown in the UI. */
+    val troubledHosts: List<String> get() = synchronized(troubled) { troubled.sorted() }
+
     /** True when [host] should be tunnelled raw rather than intercepted. Matches the host and its parents. */
     fun isExcluded(host: String): Boolean {
+        if (host.lowercase().trimEnd('.') in troubled) return true
         var h = host.lowercase().trimEnd('.')
         while (true) {
             if (h in PINNED_HOSTS || h in userExcluded) return true
@@ -252,7 +272,15 @@ class InterceptProxy(
             while (running) {
                 val req = try { readHead(cin) ?: return } catch (e: SocketTimeoutException) { return }
                 if (upstream == null || upstream.isClosed) {
-                    upstream = openUpstream(host, target, tls)
+                    upstream = try {
+                        openUpstream(host, target, tls)
+                    } catch (e: Exception) {
+                        // We cannot reach the origin the way interception needs to; hand this site
+                        // back to the browser untouched from now on.
+                        troubled.add(host.lowercase().trimEnd('.'))
+                        DeepCleanStats.givenUp = troubled.size
+                        throw e
+                    }
                     uin = BufferedInputStream(upstream.getInputStream(), 1 shl 16)
                     uout = BufferedOutputStream(upstream.getOutputStream(), 1 shl 16)
                 }
