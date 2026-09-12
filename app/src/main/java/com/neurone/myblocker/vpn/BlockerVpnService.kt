@@ -44,7 +44,9 @@ class BlockerVpnService : VpnService() {
     /** Incremented for every tunnel thread; lets a dying thread tell whether it has been superseded. */
     @Volatile private var generation = 0
     private var carConnection: com.neurone.myblocker.system.CarConnection? = null
-    /** True while protection is held down because Android Auto is projecting (it rejects any VPN). */
+    private var carReceiver: android.content.BroadcastReceiver? = null
+    @Volatile private var carBtConnected = false
+    /** True while protection is held down because the phone is connected to a car (Android Auto rejects any VPN). */
     @Volatile private var pausedForCar = false
     private lateinit var appNames: AppNames
     private val logExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "query-log").apply { isDaemon = true } }
@@ -62,9 +64,97 @@ class BlockerVpnService : VpnService() {
         super.onCreate()
         appNames = AppNames(this)
         StatsStore.init(this)
-        if (Prefs.get(this).pauseForAndroidAuto) {
-            carConnection = com.neurone.myblocker.system.CarConnection(this) { projecting -> handler.post { onCarState(projecting) } }
-            carConnection?.start()
+        if (Prefs.get(this).pauseForAndroidAuto) startCarWatch()
+    }
+
+    /**
+     * Watches for the car itself connecting, not for Android Auto projecting. Android Auto checks for
+     * a VPN before it publishes any projection state, so the projection signal comes too late; the
+     * Bluetooth link to the car and car mode fire when you get in, before Android Auto tries to start.
+     */
+    private fun startCarWatch() {
+        if (carReceiver != null) return
+        val r = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
+                when (intent.action) {
+                    android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED ->
+                        if (isCarBluetooth(intent)) { carBtConnected = true; handler.post { onCarState(true) } }
+                    android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED ->
+                        if (isCarBluetooth(intent)) { carBtConnected = false; handler.post { onCarState(false) } }
+                    android.app.UiModeManager.ACTION_ENTER_CAR_MODE -> handler.post { onCarState(true) }
+                    android.app.UiModeManager.ACTION_EXIT_CAR_MODE -> if (!carBtConnected) handler.post { onCarState(false) }
+                }
+            }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction(android.app.UiModeManager.ACTION_ENTER_CAR_MODE)
+            addAction(android.app.UiModeManager.ACTION_EXIT_CAR_MODE)
+        }
+        runCatching { registerReceiver(r, filter) }
+        carReceiver = r
+        // Projection state is a late but reliable extra resume signal.
+        carConnection = com.neurone.myblocker.system.CarConnection(this) { projecting ->
+            if (projecting) handler.post { onCarState(true) }
+        }
+        carConnection?.start()
+        // If we are already connected to the car (service started mid-drive), pause now.
+        if (isCarBluetoothConnectedNow() || com.neurone.myblocker.system.CarConnection.isProjecting(this)) {
+            carBtConnected = true
+            handler.post { onCarState(true) }
+        }
+    }
+
+    private fun stopCarWatch() {
+        carReceiver?.let { runCatching { unregisterReceiver(it) } }
+        carReceiver = null
+        carConnection?.stop()
+        carConnection = null
+    }
+
+    /** Registers or removes the car watch to match the current preference. */
+    private fun syncCarWatch() {
+        if (Prefs.get(this).pauseForAndroidAuto) startCarWatch() else stopCarWatch()
+    }
+
+    /** True if the Bluetooth device in [intent] is a car kit (car audio or hands-free class). */
+    private fun isCarBluetooth(intent: Intent): Boolean {
+        val device: android.bluetooth.BluetoothDevice? =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                intent.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE, android.bluetooth.BluetoothDevice::class.java)
+            else @Suppress("DEPRECATION") intent.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE)
+        return device != null && isCarDevice(device)
+    }
+
+    private fun isCarDevice(device: android.bluetooth.BluetoothDevice): Boolean {
+        return try {
+            val cls = device.bluetoothClass ?: return false
+            val dc = cls.deviceClass
+            dc == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_CAR_AUDIO ||
+                dc == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_HANDSFREE
+        } catch (e: SecurityException) {
+            false // BLUETOOTH_CONNECT not granted; car mode remains the trigger
+        }
+    }
+
+    private fun isCarBluetoothConnectedNow(): Boolean {
+        return try {
+            val bm = getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager ?: return false
+            val adapter = bm.adapter ?: return false
+            val bonded = adapter.bondedDevices ?: return false
+            bonded.any { isCarDevice(it) && isDeviceConnected(bm, it) }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun isDeviceConnected(bm: android.bluetooth.BluetoothManager, device: android.bluetooth.BluetoothDevice): Boolean {
+        return try {
+            bm.getConnectionState(device, android.bluetooth.BluetoothProfile.GATT) == android.bluetooth.BluetoothProfile.STATE_CONNECTED ||
+                bm.getConnectedDevices(android.bluetooth.BluetoothProfile.HEADSET).contains(device)
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -104,6 +194,7 @@ class BlockerVpnService : VpnService() {
             }
             ACTION_RESTART -> {
                 startForegroundCompat()
+                syncCarWatch()
                 restartVpn()
                 return START_STICKY
             }
@@ -111,6 +202,7 @@ class BlockerVpnService : VpnService() {
                 // ACTION_START, always-on start (SERVICE_INTERFACE) or a sticky restart with a null intent.
                 startForegroundCompat()
                 Prefs.get(this).wantsProtection = true
+                syncCarWatch()
                 startVpn()
                 return START_STICKY
             }
@@ -124,8 +216,7 @@ class BlockerVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        carConnection?.stop()
-        carConnection = null
+        stopCarWatch()
         stopVpn()
         StatsStore.flush()
         logExecutor.shutdown()

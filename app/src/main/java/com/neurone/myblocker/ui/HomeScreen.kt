@@ -77,12 +77,19 @@ fun HomeScreen(nav: Navigator) {
         if (it.resultCode == Activity.RESULT_OK) BlockerVpnService.start(context)
     }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    val bluetooth = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     fun turnOn() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        // Needed to recognise the car's Bluetooth so protection can pause for Android Auto.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && prefs.pauseForAndroidAuto &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+        ) {
+            bluetooth.launch(Manifest.permission.BLUETOOTH_CONNECT)
         }
         val consent = VpnService.prepare(context)
         if (consent != null) vpnConsent.launch(consent) else BlockerVpnService.start(context)

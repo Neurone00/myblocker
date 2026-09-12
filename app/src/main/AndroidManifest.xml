@@ -15,6 +15,8 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <!-- Samsung Internet content-blocker extension (cosmetic filtering of web pages). -->
     <uses-permission android:name="com.samsung.android.sbrowser.permission.CONTENTBLOCKER" />
+    <!-- Detect the car's Bluetooth so protection can pause for Android Auto (which rejects any VPN). -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <queries>
         <package android:name="com.sec.android.app.sbrowser" />
