@@ -8,61 +8,99 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
+import androidx.compose.ui.graphics.drawscope.withTransform
+import kotlin.math.min
+import kotlin.math.pow
 
 /**
- * The umbrella, drawn canopy up and handle down. [open] runs from 0 (furled: the ribs hug the
- * shaft) to 1 (a full dome with a scalloped hem); animate it to make the umbrella pop open
- * when protection turns on. Drawn on a canvas so it fills the same box at every state and the
- * card around it never changes size.
+ * The umbrella, drawn as a dome: rounded at the shoulders, close to vertical where the ribs end,
+ * with the hem scalloped between the rib tips and a hooked handle below. An earlier version swept a
+ * circular sector out of a single apex point, which reads as a cone rather than an umbrella.
+ *
+ * [open] runs from 0 (furled around the shaft) to 1 (full dome) and may overshoot to about 1.14 so a
+ * spring can flare the canopy; [tilt] swings the whole glyph about the handle and [squash] stretches
+ * it vertically for the anticipation. Everything is drawn inside a square box inset from the bounds,
+ * so the card around it never changes size however far the glyph moves.
  */
 @Composable
-fun UmbrellaGlyph(open: Float, tint: Color, modifier: Modifier = Modifier) {
+fun UmbrellaGlyph(
+    open: Float,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    tilt: Float = 0f,
+    squash: Float = 1f,
+) {
     Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        val o = open.coerceIn(0f, 1.14f) // a little past full so the spring can flare the ribs
-        val cx = w / 2f
-        val apex = Offset(cx, h * 0.16f)
-        val rib = h * 0.50f // rib length from the apex; also the dome radius when open
-        val spread = ((6f + 72f * o) * PI / 180.0).toFloat() // half-angle of the fan
-        val ribs = 6
-        val tips = List(ribs + 1) { i ->
-            val a = -spread + 2f * spread * i / ribs
-            Offset(cx + rib * sin(a), apex.y + rib * cos(a))
-        }
-        val line = w * 0.085f
+        val box = min(size.width, size.height)
+        val ox = (size.width - box) / 2f
+        val oy = (size.height - box) / 2f
+        val cx = box / 2f
+        val apexY = box * 0.15f
+        val handleY = box * 0.76f
+        val pivot = Offset(cx, box * 0.80f)
 
-        // Shaft with a hook at the bottom, under the canopy so the join is hidden.
-        val hookR = w * 0.11f
-        val hookTop = h * 0.76f
+        val o = open.coerceIn(0f, 1.14f)
+        val opened = o.coerceAtMost(1f)
+        // Width lags the opening (pow 1.5) so half-open still reads as furled rather than as a wide
+        // blob; past full open the canopy barely widens and flattens instead, so an overshoot flexes
+        // the dome rather than growing it out of the box.
+        val wp = opened.pow(1.5f) + (o - opened) * 0.35f
+        val halfW = box * (0.050f + 0.405f * wp)
+        val domeH = box * (0.42f - 0.095f * wp)
+        val hemY = apexY + domeH
+        // Open, the rim is nearer the eye in the middle so the inner tips hang a little lower.
+        // Furled, that same term becomes the gathered fabric tapering to a point down the shaft.
+        val bow = box * (0.030f * opened + 0.090f * (1f - opened))
+        val scallop = box * 0.040f * o // fabric between two tips is pulled up
+        val line = box * 0.075f
+
+        // Four hem segments, so five tips; the outer two sit where the dome turns vertical.
+        val tips = List(SEGMENTS + 1) { i ->
+            val x = cx - halfW + 2f * halfW * i / SEGMENTS
+            val u = (x - cx) / halfW
+            Offset(x, hemY + bow * (1f - u * u))
+        }
+
         val shaft = Path().apply {
-            moveTo(cx, apex.y - h * 0.10f) // ferrule above the apex
-            lineTo(cx, hookTop)
-            arcTo(Rect(cx - 2 * hookR, hookTop - hookR, cx, hookTop + hookR), 0f, 180f, false)
+            moveTo(cx, apexY - box * 0.085f) // ferrule above the crown
+            lineTo(cx, handleY)
+            val r = box * 0.105f
+            arcTo(Rect(cx - 2f * r, handleY - r, cx, handleY + r), 0f, 180f, false)
         }
-        drawPath(shaft, tint, style = Stroke(width = line, cap = StrokeCap.Round))
 
-        // Canopy: two outward-bulging edges from the apex, joined by a scalloped hem.
-        val bulge = 0.9f
         val canopy = Path().apply {
-            moveTo(apex.x, apex.y)
-            val l = tips.first()
-            quadraticTo(cx - rib * sin(spread) * bulge, apex.y + rib * cos(spread) * 0.3f, l.x, l.y)
-            for (i in 1..ribs) {
-                val a = tips[i - 1]
-                val b = tips[i]
-                val mx = (a.x + b.x) / 2f
-                val my = (a.y + b.y) / 2f
-                val k = 0.22f * o // scallop depth, none while furled
-                quadraticTo(mx + (apex.x - mx) * k, my + (apex.y - my) * k, b.x, b.y)
+            val first = tips.first()
+            val last = tips.last()
+            moveTo(first.x, first.y)
+            // Left shoulder up to the crown, then the right shoulder back down to the last tip.
+            cubicTo(cx - halfW, hemY - domeH * TIP_TANGENT, cx - halfW * SHOULDER, apexY, cx, apexY)
+            cubicTo(cx + halfW * SHOULDER, apexY, cx + halfW, hemY - domeH * TIP_TANGENT, last.x, last.y)
+            for (i in SEGMENTS downTo 1) {
+                val a = tips[i]
+                val b = tips[i - 1]
+                quadraticTo((a.x + b.x) / 2f, (a.y + b.y) / 2f - scallop, b.x, b.y)
             }
-            quadraticTo(cx + rib * sin(spread) * bulge, apex.y + rib * cos(spread) * 0.3f, apex.x, apex.y)
             close()
         }
-        drawPath(canopy, tint)
+
+        withTransform({
+            translate(ox, oy)
+            scale(FIT, FIT, Offset(cx, box / 2f))
+            rotate(tilt, pivot)
+            scale(1f, squash, pivot)
+        }) {
+            drawPath(shaft, tint, style = Stroke(width = line, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawPath(canopy, tint)
+        }
     }
 }
+
+private const val SEGMENTS = 4
+/** How far the crown's flat tangent runs out before the dome falls away. */
+private const val SHOULDER = 0.62f
+/** How high up the vertical tangent at the rib tips reaches. */
+private const val TIP_TANGENT = 0.58f
+/** Headroom inside the bounds so a tilt or an overshoot never clips the glyph. */
+private const val FIT = 0.90f

@@ -54,17 +54,58 @@ class BlockerVpnService : VpnService() {
     private val handler = Handler(Looper.getMainLooper())
     private val notificationTicker = object : Runnable {
         override fun run() {
-            if (isRunning) {
+            // Nobody can read the notification with the screen off, so stop refreshing it until
+            // the phone wakes: the tunnel itself blocks on its sockets and costs nothing meanwhile.
+            if (isRunning && screenOn) {
                 Notifications.updateRunning(this@BlockerVpnService)
                 handler.postDelayed(this, NOTIFICATION_REFRESH_MS)
             }
         }
     }
 
+    @Volatile private var screenOn = true
+    private var screenReceiver: android.content.BroadcastReceiver? = null
+
+    /** Follows the phone into standby: with the screen off there is no UI left to keep current. */
+    private fun startScreenWatch() {
+        if (screenReceiver != null) return
+        val pm = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        screenOn = pm?.isInteractive ?: true
+        val r = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
+                when (intent.action) {
+                    Intent.ACTION_SCREEN_OFF -> {
+                        screenOn = false
+                        handler.removeCallbacks(notificationTicker)
+                    }
+                    Intent.ACTION_SCREEN_ON -> {
+                        screenOn = true
+                        if (isRunning) {
+                            handler.removeCallbacks(notificationTicker)
+                            handler.post(notificationTicker)
+                        }
+                    }
+                }
+            }
+        }
+        val f = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }
+        runCatching { registerReceiver(r, f) }
+        screenReceiver = r
+    }
+
+    private fun stopScreenWatch() {
+        screenReceiver?.let { runCatching { unregisterReceiver(it) } }
+        screenReceiver = null
+    }
+
     override fun onCreate() {
         super.onCreate()
         appNames = AppNames(this)
         StatsStore.init(this)
+        startScreenWatch()
         if (Prefs.get(this).pauseForAndroidAuto) startCarWatch()
     }
 
@@ -287,6 +328,7 @@ class BlockerVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        stopScreenWatch()
         stopCarWatch()
         stopVpn()
         StatsStore.flush()
@@ -432,7 +474,7 @@ class BlockerVpnService : VpnService() {
             restarts = 0
             StatsStore.markActive()
             broadcastState()
-            handler.post(notificationTicker)
+            if (screenOn) handler.post(notificationTicker)
             p.run() // blocks until stopped or the tunnel dies
         } catch (e: Exception) {
             Log.e(TAG, "tunnel failed", e)

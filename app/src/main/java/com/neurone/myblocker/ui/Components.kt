@@ -28,11 +28,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -43,14 +46,35 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
 
-/** Emits a new value every [periodMs] so screens re-read plain (non-observable) state. */
+/**
+ * Emits a new value every [periodMs] so screens re-read plain (non-observable) state, but only
+ * while the screen is on and this activity is in front. A stopped activity keeps its composition,
+ * so an unconditional loop would go on waking the CPU every couple of seconds all night.
+ */
 @Composable
 fun rememberTick(periodMs: Long): State<Long> {
     val tick = remember { mutableLongStateOf(0L) }
-    LaunchedEffect(periodMs) {
+    val owner = LocalLifecycleOwner.current
+    var inFront by remember { mutableStateOf(false) }
+    DisposableEffect(owner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> inFront = true
+                Lifecycle.Event.ON_STOP -> inFront = false
+                else -> Unit
+            }
+        }
+        owner.lifecycle.addObserver(observer) // replays up to the current state, so this starts true when visible
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(periodMs, inFront) {
+        if (!inFront) return@LaunchedEffect
         while (true) {
             delay(periodMs)
             tick.longValue = tick.longValue + 1

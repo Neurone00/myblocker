@@ -11,10 +11,9 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.layout.Arrangement
@@ -66,8 +65,12 @@ import com.neurone.myblocker.update.Updater
 import com.neurone.myblocker.vpn.BlockerVpnService
 import kotlinx.coroutines.launch
 
-/** How far open the umbrella rests while protection is off: half-closed, not furled. */
-private const val UMBRELLA_REST = 0.45f
+/**
+ * How far open the umbrella rests while protection is off. The canopy's width lags the opening, so
+ * this sits higher than half to actually look half-open: about half the full width, with the hem
+ * already gathering down the shaft.
+ */
+private const val UMBRELLA_REST = 0.58f
 
 @Composable
 fun HomeScreen(nav: Navigator) {
@@ -148,29 +151,40 @@ fun HomeScreen(nav: Navigator) {
             if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
             label = "status",
         )
-        // The umbrella rests half-closed. Turning protection on: a quick tuck (anticipation), then it
-        // springs open past full and settles, with a small swing of the canopy. While starting it
-        // breathes between half and mostly open; turning off lowers it gently, no bounce.
+        // Anticipate and bounce: the umbrella crouches, then springs open past full while the canopy
+        // swings three times on the handle and the squash settles out. While starting it breathes
+        // between furled and mostly open; turning off lowers it gently, no bounce.
         val umbrellaOpen = remember { Animatable(if (running) 1f else UMBRELLA_REST) }
         val umbrellaTilt = remember { Animatable(0f) }
+        val umbrellaSquash = remember { Animatable(1f) }
         LaunchedEffect(running, starting) {
             when {
                 running -> {
                     if (umbrellaOpen.value < 0.95f) {
-                        umbrellaOpen.animateTo((umbrellaOpen.value - 0.12f).coerceAtLeast(0.25f), tween(110, easing = FastOutSlowInEasing))
                         launch {
                             umbrellaTilt.animateTo(
                                 0f,
-                                keyframes { durationMillis = 700; -9f at 120; 7f at 330; -3f at 500; 0f at 700 },
+                                keyframes {
+                                    durationMillis = 1050
+                                    -12f at 180; 9f at 420; -5f at 640; 2f at 840; 0f at 1050
+                                },
                             )
                         }
-                        umbrellaOpen.animateTo(1f, spring(dampingRatio = 0.32f, stiffness = 420f))
+                        launch {
+                            umbrellaSquash.animateTo(
+                                1f,
+                                keyframes { durationMillis = 700; 1.06f at 170; 0.98f at 420; 1f at 700 },
+                            )
+                        }
+                        umbrellaOpen.animateTo(0.28f, tween(170, easing = LinearOutSlowInEasing))
+                        umbrellaOpen.animateTo(1f, spring(dampingRatio = 0.26f, stiffness = 280f))
                     } else {
                         umbrellaOpen.animateTo(1f, tween(250))
                     }
                 }
                 starting -> {
                     umbrellaTilt.snapTo(0f)
+                    umbrellaSquash.snapTo(1f)
                     while (true) {
                         umbrellaOpen.animateTo(0.72f, tween(650, easing = FastOutSlowInEasing))
                         umbrellaOpen.animateTo(UMBRELLA_REST, tween(650, easing = FastOutSlowInEasing))
@@ -178,6 +192,7 @@ fun HomeScreen(nav: Navigator) {
                 }
                 else -> {
                     umbrellaTilt.snapTo(0f)
+                    umbrellaSquash.snapTo(1f)
                     umbrellaOpen.animateTo(UMBRELLA_REST, tween(480, easing = FastOutSlowInEasing))
                 }
             }
@@ -188,12 +203,9 @@ fun HomeScreen(nav: Navigator) {
                 UmbrellaGlyph(
                     open = umbrellaOpen.value,
                     tint = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .graphicsLayer {
-                            rotationZ = umbrellaTilt.value
-                            transformOrigin = TransformOrigin(0.5f, 0.8f) // swing from the handle
-                        },
+                    modifier = Modifier.size(44.dp),
+                    tilt = umbrellaTilt.value,
+                    squash = umbrellaSquash.value,
                 )
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
