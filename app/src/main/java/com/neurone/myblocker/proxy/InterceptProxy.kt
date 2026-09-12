@@ -563,32 +563,47 @@ class InterceptProxy(
          */
         val COLLAPSER_JS: String = """
 (function(){try{
-var RE=/(^|[^a-z])(adv|ads|advert|advertis|advertisement|reklam|werbung|publicidad|pubblicit|sponsor|banner|billboard|leaderboard)([^a-z]|${'$'})/i;
-var LABEL=/^\s*(adv|ads|advert|advertisement|advertising|publicidad|pubblicit[aà]|sponsor|sponsored|werbung|reklama|annuncio|annunci|pubblicità)\s*${'$'}/i;
+var W=window,D=document;
+var RE=/(^|[^a-z])(ad|adv|ads|advert|advertis|advertisement|reklam|werbung|publicidad|pubblicit|sponsor|banner|billboard|leaderboard|skyscraper|mpu|dfp|gpt|adslot|adunit|adbox|adwrap|adcontainer|adholder|adzone|adspace|adframe|adcode|adlabel)([^a-z]|${'$'})/i;
+var LABEL=/^[\s\-–—•·.:|()\[\]]*(adv|ads|ad|advert|advertisement|advertising|publicidad|publicit[eé]|pubblicit[aà]|sponsor|sponsored|sponsorizzato|contenuto sponsorizzato|werbung|anzeige|reklama|annuncio|annunci)[\s\-–—•·.:|()\[\]]*${'$'}/i;
+var KEEP=/^(html|body|main|article|header|footer|nav|form|table|tbody|thead|tr|td|th)${'$'}/i;
+var SEL='ins.adsbygoogle,[id^=google_ads_],[id^=div-gpt-ad],[id*=div-gpt-ad],iframe[src*=doubleclick],iframe[src*=googlesyndication],iframe[src*=amazon-adsystem],iframe[src*=adnxs],[data-ad-slot],[data-google-query-id]';
+var MEDIA='img[src],picture,video,audio,canvas,form,input,button,select,textarea,h1,h2,h3,h4,h5,h6,article,p,table';
 function cls(el){var c=el.className;return typeof c==='string'?c:(c&&c.baseVal)||'';}
-function adish(el){return RE.test(el.id+' '+cls(el))||el.hasAttribute('data-ad-slot')||el.hasAttribute('data-ad-client')||el.hasAttribute('data-google-query-id')||el.hasAttribute('data-ad');}
-function empty(el){
- if(el.querySelector('img[src],picture,video,canvas,form,input,button,h1,h2,h3,h4,article,p'))return false;
- var t=(el.textContent||'').replace(/\s+/g,' ').trim();
- if(t.length>25&&!LABEL.test(t))return false;
- var ifr=el.querySelector('iframe');
- return true;
-}
-function hide(el){try{if(el&&el.style&&el.getAttribute('data-adb')!=='1'){el.style.setProperty('display','none','important');el.setAttribute('data-adb','1');}}catch(e){}}
-function labelOnly(el){var t=(el.textContent||'').replace(/\s+/g,' ').trim();return t.length<=18&&LABEL.test(t);}
+function adish(el){return RE.test(el.id+' '+cls(el))||el.hasAttribute('data-ad-slot')||el.hasAttribute('data-ad-client')||el.hasAttribute('data-google-query-id')||el.hasAttribute('data-ad')||el.hasAttribute('data-ad-unit')||el.hasAttribute('data-adunit');}
+function norm(s){return (s||'').replace(/\s+/g,' ').trim();}
+function txt(el){return norm(el.textContent);}
+/* text of el ignoring anything we already hid, so an emptied wrapper reads as empty */
+function vtxt(el){if(el.nodeType===3)return el.nodeValue||'';if(el.nodeType!==1||el.getAttribute('data-adb'))return '';var s='';for(var n=el.firstChild;n;n=n.nextSibling)s+=vtxt(n);return s;}
+function pseudo(el){try{var b=W.getComputedStyle(el,'::before').content,a=W.getComputedStyle(el,'::after').content;return norm(((b&&b!=='none'&&b!=='normal')?b:'')+' '+((a&&a!=='none'&&a!=='normal')?a:'')).replace(/["']/g,'');}catch(e){return '';}}
+/* whole visible text is just an ad label ("ADV", "Pubblicità"), literal or CSS-generated on an ad-ish box */
+function labelOnly(el,a){var t=txt(el);if(t.length>24)return false;if(t&&LABEL.test(t))return true;if(!t&&a){var p=pseudo(el);return !!p&&LABEL.test(p);}return false;}
+function hasContent(el){if(el.querySelector(MEDIA))return true;var t=txt(el);return t.length>25&&!LABEL.test(t);}
+function hasVisibleContent(el){var m=el.querySelectorAll(MEDIA);for(var i=0;i<m.length;i++){var x=m[i],h=false;for(var q=x;q&&q!==el;q=q.parentElement){if(q.getAttribute('data-adb')){h=true;break;}}if(!h)return true;}var t=norm(vtxt(el));return t.length>0&&!LABEL.test(t);}
+function mark(el,v){try{if(el&&el.style){if(!el.getAttribute('data-adb-d'))el.setAttribute('data-adb-d',el.style.getPropertyValue('display')||'-');el.style.setProperty('display','none','important');el.setAttribute('data-adb',v);}}catch(e){}}
+/* after hiding an ad, collapse the ancestors it leaves empty (the grey reserved box), a few levels up */
+function collapseUp(el){var p=el.parentElement,d=0;while(p&&d++<4){if(KEEP.test(p.tagName)||p.getAttribute('data-adb'))return;if(hasVisibleContent(p))return;var ks=p.children,n=0;for(var i=0;i<ks.length;i++){if(!ks[i].getAttribute('data-adb'))n++;}if(n>6)return;mark(p,'2');p=p.parentElement;}}
+function hide(el){if(el.getAttribute('data-adb'))return;mark(el,'1');collapseUp(el);}
+/* a wrapper we collapsed that later receives real content (widget loaded by script) is given back */
+function restore(){var r=D.querySelectorAll('[data-adb="2"]');for(var i=0;i<r.length;i++){var el=r[i];if(hasVisibleContent(el)){var o=el.getAttribute('data-adb-d');el.style.removeProperty('display');if(o&&o!=='-')el.style.setProperty('display',o);el.removeAttribute('data-adb');el.removeAttribute('data-adb-d');}}}
+var sweeps=0,mo=null;
 function sweep(){try{
- var s=document.querySelectorAll('ins.adsbygoogle,[id^=google_ads_],[id^=div-gpt-ad],[id*=div-gpt-ad],iframe[src*=doubleclick],iframe[src*=googlesyndication],iframe[src*=amazon-adsystem],iframe[src*=adnxs],[data-ad-slot],[data-google-query-id]');
- for(var i=0;i<s.length;i++)hide(s[i]);
- var d=document.querySelectorAll('div,section,aside,ul,li,figure,ins,span');
- for(var j=0;j<d.length;j++){var el=d[j];if(el.getAttribute('data-adb')==='1')continue;
-  // Placeholder whose entire visible text is just an ad label (e.g. a grey "ADV" box), whatever its class.
-  if(labelOnly(el)&&!el.querySelector('img[src],video,canvas,input,h1,h2,h3')){hide(el);var p=el.parentElement;if(p&&labelOnly(p))hide(p);continue;}
-  if(adish(el)&&empty(el))hide(el);}
+ sweeps++;
+ var s=D.querySelectorAll(SEL);for(var i=0;i<s.length;i++)hide(s[i]);
+ var d=D.querySelectorAll('div,section,aside,ul,li,figure,ins,span,td');
+ for(var j=0;j<d.length;j++){var el=d[j];if(el.getAttribute('data-adb'))continue;var a=adish(el);
+  if(labelOnly(el,a)&&!el.querySelector(MEDIA)){hide(el);continue;}
+  if(a&&!hasContent(el))hide(el);}
+ restore();
+ if(sweeps>600&&mo){try{mo.disconnect();}catch(e){}mo=null;}
 }catch(e){}}
-function run(){sweep();}
-if(document.readyState!=='loading')run();else document.addEventListener('DOMContentLoaded',run);
-var n=0,mo;try{mo=new MutationObserver(function(){if(n++>300)return;sweep();});mo.observe(document.documentElement||document,{childList:true,subtree:true});}catch(e){}
-setTimeout(function(){try{mo&&mo.disconnect();}catch(e){}sweep();},12000);
+var pend=null;function sched(ms){if(pend)return;pend=setTimeout(function(){pend=null;sweep();},ms||250);}
+if(D.readyState!=='loading')sweep();else D.addEventListener('DOMContentLoaded',function(){sweep();});
+try{mo=new MutationObserver(function(){sched(250);});mo.observe(D.documentElement||D,{childList:true,subtree:true,attributes:true,attributeFilter:['class','id','style']});}catch(e){}
+W.addEventListener('load',function(){sched(50);});
+W.addEventListener('scroll',function(){sched(700);},{passive:true});
+W.addEventListener('resize',function(){sched(700);},{passive:true});
+setTimeout(function(){sweep();},1500);setTimeout(function(){sweep();},5000);
 }catch(e){}})();
 """.trim()
 

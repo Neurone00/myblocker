@@ -46,6 +46,15 @@ jobs:
           echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> "$GITHUB_ENV"
           echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> "$GITHUB_ENV"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Collapser test (in-page ad placeholder removal, run in jsdom)
+        run: |
+          npm ci --prefix tools/collapser-test --no-audit --no-fund
+          node tools/collapser-test/test.js
+
       - name: Unit tests
         run: ./gradlew --no-daemon testReleaseUnitTest
 

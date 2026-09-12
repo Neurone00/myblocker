@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Umbrella
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -46,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -138,12 +138,19 @@ fun HomeScreen(nav: Navigator) {
             if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
             label = "status",
         )
+        // The umbrella pops open (with a little overshoot) when protection comes up, half-open while starting.
+        val umbrellaOpen by animateFloatAsState(
+            targetValue = when { running -> 1f; starting -> 0.35f; else -> 0f },
+            animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow),
+            label = "umbrella",
+        )
         Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = MaterialTheme.shapes.large) {
+            // Fixed text lines so the card keeps its height whatever the state says.
             Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.Umbrella, contentDescription = null,
+                UmbrellaGlyph(
+                    open = umbrellaOpen,
                     tint = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(40.dp),
                 )
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
@@ -155,6 +162,8 @@ fun HomeScreen(nav: Navigator) {
                         },
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         when {
@@ -165,6 +174,9 @@ fun HomeScreen(nav: Navigator) {
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        minLines = 2,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Spacer(Modifier.width(12.dp))
