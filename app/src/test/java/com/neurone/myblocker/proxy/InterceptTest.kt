@@ -83,6 +83,22 @@ class InterceptTest {
         f.delete()
     }
 
+    @Test fun pinnedAndUserExcludedHostsAreTunnelled() {
+        val p = InterceptProxy(ca = com.neurone.myblocker.tls.CertAuthority.load(Files.createTempDirectory("ca").toFile()), protect = { true }, rules = { CosmeticRules.EMPTY })
+        // Built-in pinned list, host and subdomains
+        assertTrue(p.isExcluded("google.com"))
+        assertTrue(p.isExcluded("accounts.google.com"))
+        assertTrue(p.isExcluded("i.ytimg.com"))
+        assertTrue(p.isExcluded("business.facebook.com"))
+        // Not excluded: an ordinary content site is intercepted
+        assertFalse(p.isExcluded("example.com"))
+        assertFalse(p.isExcluded("notgoogle.com")) // suffix must be a full label boundary
+        // User additions
+        p.userExcluded = setOf("mybank.example")
+        assertTrue(p.isExcluded("login.mybank.example"))
+        assertFalse(p.isExcluded("example.com"))
+    }
+
     @Test fun cspGetsTheRulesHostAppended() {
         val p = InterceptProxy(ca = com.neurone.myblocker.tls.CertAuthority.load(Files.createTempDirectory("ca").toFile()), protect = { true }, rules = { CosmeticRules.EMPTY })
         assertEquals("default-src 'self'; style-src 'self' https://rules.adbrella.internal", p.adjustCsp("default-src 'self'; style-src 'self'"))

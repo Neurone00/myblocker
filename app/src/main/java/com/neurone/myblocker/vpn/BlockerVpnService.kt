@@ -165,6 +165,7 @@ class BlockerVpnService : VpnService() {
                 val canIntercept = prefs.interceptBrowsers && CaInstall.isInstalled(this)
                 if (canIntercept) {
                     intercept = InterceptProxy(CaInstall.get(this), { protect(it) }, { WebFilters.cosmeticRules(this) })
+                    intercept.userExcluded = prefs.webExcludedHosts
                     intercept.start()
                     Thread({ WebFilters.cosmeticRules(this) }, "cosmetic-parse").start()
                 }

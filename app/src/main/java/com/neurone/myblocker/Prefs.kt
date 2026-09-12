@@ -126,6 +126,11 @@ class Prefs private constructor(context: Context) {
         get() = sp.getBoolean(KEY_INTERCEPT, true)
         set(v) = sp.edit().putBoolean(KEY_INTERCEPT, v).apply()
 
+    /** Hosts the user wants tunnelled untouched even in deep clean (in addition to the built-in pinned list). */
+    var webExcludedHosts: Set<String>
+        get() = sp.getStringSet(KEY_WEB_EXCLUDED, null)?.toSet() ?: emptySet()
+        set(v) = sp.edit().putStringSet(KEY_WEB_EXCLUDED, HashSet(v)).apply()
+
     var autoUpdateApp: Boolean
         get() = sp.getBoolean(KEY_AUTO_UPDATE_APP, true)
         set(v) = sp.edit().putBoolean(KEY_AUTO_UPDATE_APP, v).apply()
@@ -192,6 +197,7 @@ class Prefs private constructor(context: Context) {
         private const val KEY_AUTO_UPDATE_APP = "auto_update_app"
         private const val KEY_DEEP_CLEAN = "deep_clean"
         private const val KEY_INTERCEPT = "intercept_browsers"
+        private const val KEY_WEB_EXCLUDED = "web_excluded_hosts"
         private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
         private const val KEY_ALWAYS_ON_ACK = "always_on_ack"
         private const val KEY_WEB_UPDATED = "web_updated"

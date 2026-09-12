@@ -106,6 +106,11 @@ class InterceptProxy(
                 val hello = TlsPeek.readClientHello(cin)
                 if (hello == null) { client.close(); return }
                 val host = hello.sni ?: if (internal) INTERNAL_HOST else ip(target.dst)
+                if (!internal && isExcluded(host)) {
+                    // Certificate-pinned or user-excluded site: tunnel the raw TLS untouched so pinning holds.
+                    passthrough(client, SequenceInputStream(ByteArrayInputStream(hello.consumed), cin), target)
+                    return
+                }
                 val minted = ca.forHost(host)
                 val replay = SequenceInputStream(ByteArrayInputStream(hello.consumed), cin)
                 val ssl = minted.sslContext.socketFactory.createSocket(PrefixedSocket(client, replay), host, target.dstPort, true) as SSLSocket
@@ -128,6 +133,41 @@ class InterceptProxy(
 
     /** Diagnostics hook (tests): called with any exception that ends a connection. */
     @Volatile var errorListener: ((Throwable) -> Unit)? = null
+
+    /** Extra hostnames (and their subdomains) the user chose to leave untouched. */
+    @Volatile var userExcluded: Set<String> = emptySet()
+    @Volatile var passthroughs: Long = 0; private set
+
+    /** True when [host] should be tunnelled raw rather than intercepted. Matches the host and its parents. */
+    fun isExcluded(host: String): Boolean {
+        var h = host.lowercase().trimEnd('.')
+        while (true) {
+            if (h in PINNED_HOSTS || h in userExcluded) return true
+            val i = h.indexOf('.')
+            if (i < 0) return false
+            h = h.substring(i + 1)
+        }
+    }
+
+    /** Splices the client's raw TLS stream to the origin and back, so certificate pinning is preserved. */
+    private fun passthrough(client: Socket, clientReplay: InputStream, target: Target) {
+        passthroughs++
+        val upstream = Socket()
+        try {
+            protect(upstream)
+            upstream.tcpNoDelay = true
+            upstream.connect(InetSocketAddress(InetAddress.getByAddress(target.dst), target.dstPort), 15_000)
+            val toUpstream = Thread({ runCatching { clientReplay.copyTo(upstream.getOutputStream()); upstream.getOutputStream().flush() } }, "pass-up")
+            toUpstream.isDaemon = true
+            toUpstream.start()
+            runCatching { upstream.getInputStream().copyTo(client.getOutputStream()); client.getOutputStream().flush() }
+            toUpstream.join(1000)
+        } catch (e: Exception) {
+            Log.d(TAG, "passthrough to ${ip(target.dst)}:${target.dstPort} failed: ${e.message}")
+        } finally {
+            runCatching { upstream.close() }
+        }
+    }
 
     // ------------------------------------------------------------- upstream
 
@@ -460,6 +500,21 @@ class InterceptProxy(
         private const val MAX_HTML = 4 * 1024 * 1024
         const val INTERNAL_HOST = "rules.adbrella.internal"
         val INTERNAL_IP: ByteArray = byteArrayOf(10, 111, 222.toByte(), 3)
+
+        /**
+         * Hosts that pin certificates or must not be touched for safety. Browsing to these through
+         * an intercepting proxy would break with our certificate, so we tunnel them raw instead.
+         * Google properties are pinned in Chrome; payment and account domains are left intact.
+         */
+        val PINNED_HOSTS: Set<String> = setOf(
+            "google.com", "gstatic.com", "googleapis.com", "youtube.com", "ytimg.com", "ggpht.com",
+            "gmail.com", "googleusercontent.com", "google-analytics.com", "doubleclick.net",
+            "facebook.com", "fbcdn.net", "instagram.com", "cdninstagram.com", "whatsapp.com", "whatsapp.net",
+            "apple.com", "icloud.com", "microsoft.com", "live.com", "office.com", "windowsupdate.com",
+            "mozilla.org", "mozilla.com", "cloudflareclient.com",
+            "paypal.com", "stripe.com", "coinbase.com", "revolut.com",
+            "samsung.com", "samsungcloud.com", "samsungqbe.com",
+        )
 
         /** Browsers that trust user-installed CAs and therefore can be tidied. Firefox is left out on purpose. */
         val BROWSER_PACKAGES: Set<String> = setOf(
