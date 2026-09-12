@@ -152,6 +152,10 @@ class InterceptEndToEndTest {
             ssl.getOutputStream().flush()
             val r = readResponse(BufferedInputStream(ssl.getInputStream()))
             ssl.close()
+            if (!r.head.startsWith("HTTP")) {
+                Thread.sleep(200)
+                throw AssertionError("empty/invalid response for '$request'; proxy errors: ${proxyErrors.joinToString("\n---\n")}")
+            }
             return r
         }
 
