@@ -127,7 +127,11 @@ class InterceptProxy(
                     if (!internal) { handshakeFailures++; DeepCleanStats.handshakeFailures = handshakeFailures }
                     throw e
                 }
-                if (internal) serveInternal(ssl) else relayHttp(ssl.getInputStream(), ssl.getOutputStream(), ssl, host, target, tls = true)
+                if (internal) serveInternal(ssl.getInputStream(), ssl.getOutputStream(), tls = true)
+                else relayHttp(ssl.getInputStream(), ssl.getOutputStream(), ssl, host, target, tls = true)
+            } else if (internal) {
+                // Plain HTTP works without the certificate, so the test page can explain what is missing.
+                serveInternal(cin, client.getOutputStream(), tls = false)
             } else {
                 relayHttp(cin, client.getOutputStream(), client, ip(target.dst), target, tls = false)
             }
@@ -524,9 +528,12 @@ class InterceptProxy(
 
     // ------------------------------------------------------------- internal rules host
 
-    private fun serveInternal(ssl: SSLSocket) {
-        val input = BufferedInputStream(ssl.getInputStream())
-        val out = BufferedOutputStream(ssl.getOutputStream())
+    /** Lines for the test page describing the deep-clean state; set by the service. */
+    @Volatile var statusProvider: (() -> List<String>)? = null
+
+    private fun serveInternal(rawIn: InputStream, rawOut: OutputStream, tls: Boolean) {
+        val input = BufferedInputStream(rawIn)
+        val out = BufferedOutputStream(rawOut)
         while (running) {
             val req = try { readHead(input) ?: return } catch (e: SocketTimeoutException) { return }
             val path = req.startLine.split(' ').getOrNull(1) ?: "/"
@@ -534,7 +541,7 @@ class InterceptProxy(
             val r = rules()
             val isTest = clean == "/test" || clean == "/test/"
             val css: String? = when {
-                isTest -> testPage()
+                isTest -> testPage(tls)
                 clean == "/g.css" -> r.genericCss
                 clean.startsWith("/s/") && clean.endsWith(".css") -> r.siteCss(clean.removePrefix("/s/").removeSuffix(".css"))
                 else -> null
@@ -569,11 +576,19 @@ class InterceptProxy(
      * the proxy and the certificate work in that browser; it then shows three placeholders shaped
      * like the boxes news sites leave behind and reports whether the collapser removed them.
      */
-    private fun testPage(): String = """
+    private fun testPage(tls: Boolean): String {
+        val status = runCatching { statusProvider?.invoke() }.getOrNull().orEmpty()
+        val statusHtml = if (status.isEmpty()) "" else "<ul>" + status.joinToString("") { "<li>" + it.replace("&", "&amp;").replace("<", "&lt;") + "</li>" } + "</ul>"
+        val certCard = if (tls)
+            "<div class=\"card\"><p class=\"ok\">Certificate: trusted by this browser.</p><p>You reached this page over HTTPS with Adbrella's own certificate.</p></div>"
+        else
+            "<div class=\"card\"><p><b>Certificate check:</b> this page came over plain HTTP. <a href=\"https://$INTERNAL_HOST/test\">Open the HTTPS version</a>: if it loads, Chrome trusts Adbrella's certificate; a certificate warning means it is not installed as a <i>CA certificate</i> yet (Settings › Security and privacy › Other security settings › Install from device storage › <b>CA certificate</b>).</p></div>"
+        return """
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Adbrella test</title>
 <style>body{font-family:sans-serif;margin:0;padding:20px;background:#f3f4f8;color:#1b1c1f}h1{font-size:22px;margin:0 0 8px}.card{background:#fff;border-radius:16px;padding:16px;margin:0 0 14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .ph{background:#dedede;color:#9a9a9a;text-align:center;font-size:34px;line-height:120px;min-height:120px;margin:10px 0}.ok{color:#1b7f3b;font-weight:600}.bad{color:#b3261e;font-weight:600}small{color:#666}#t3::before{content:"Pubblicità"}</style></head>
-<body><div class="card"><h1>☂ Adbrella can see this browser</h1><p>This page comes from Adbrella itself: the tunnel, the proxy and the certificate all work here.</p></div>
+<body><div class="card"><h1>☂ Adbrella can see this browser</h1><p>This page comes from Adbrella itself, so Deep clean is routing this browser's traffic.</p>$statusHtml</div>
+$certCard
 <div class="card"><p>Three placeholders shaped like the boxes news sites leave behind. They should vanish within a second:</p>
 <div id="t1" class="adv-box ph">ADV</div>
 <div id="t2" class="box-top ph"><ins class="adsbygoogle" style="display:block;height:120px"></ins></div>
@@ -586,6 +601,7 @@ if(n===3){v.textContent='All three removed. Tidying works in this browser; if a 
 else{v.textContent='Only '+n+' of 3 removed ('+(h('t1')?'':'label ')+(h('t2')?'':'slot ')+(h('t3')?'':'css-label ')+'left). The script runs but misses that shape.';v.className='bad';}},1500);</script>
 </body></html>
 """.trim()
+    }
 
     companion object {
         private const val TAG = "InterceptProxy"

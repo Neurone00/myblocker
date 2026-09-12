@@ -37,6 +37,10 @@ object CaInstall {
 
     @Volatile private var installedCache: Pair<Long, Boolean>? = null
 
+    /** Number of user-installed certificates seen in Android's CA store at the last check; -1 if unknown. */
+    @Volatile var userCertCount: Int = -1
+        private set
+
     /** True when the CA certificate is installed in Android's user trust store (answer cached for a few seconds). */
     fun isInstalled(context: Context): Boolean {
         val c = installedCache
@@ -54,13 +58,17 @@ object CaInstall {
             val ks = KeyStore.getInstance("AndroidCAStore")
             ks.load(null, null)
             val aliases = ks.aliases()
+            var users = 0
+            var found = false
             while (aliases.hasMoreElements()) {
                 val alias = aliases.nextElement()
                 if (!alias.startsWith("user:")) continue
+                users++
                 val cert = ks.getCertificate(alias) as? X509Certificate ?: continue
-                if (cert.encoded.contentEquals(ours.encoded)) return true
+                if (cert.encoded.contentEquals(ours.encoded)) found = true
             }
-            false
+            userCertCount = users
+            found
         } catch (e: Exception) {
             Log.w(TAG, "cannot read trust store", e)
             false

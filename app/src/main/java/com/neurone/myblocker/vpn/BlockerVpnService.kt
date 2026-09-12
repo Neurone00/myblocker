@@ -147,6 +147,24 @@ class BlockerVpnService : VpnService() {
         }
     }
 
+    /** What the internal test page shows, so a phone can explain itself without a debugger. */
+    private fun deepCleanStatusLines(): List<String> {
+        val p = Prefs.get(this)
+        val cert = CaInstall.isInstalled(this)
+        val n = CaInstall.userCertCount
+        return listOf(
+            "Deep clean (route all traffic): on",
+            "Tidy pages in browsers: " + if (p.interceptBrowsers) "on" else "OFF — turn it on under Advanced",
+            "Adbrella certificate in Android's CA store: " + when {
+                cert -> "yes"
+                n == 0 -> "NO — the store has no user certificates; the install did not go through"
+                n > 0 -> "NO — $n user certificate(s) present but none is Adbrella's (installed as a VPN/app certificate, or an older one?)"
+                else -> "NO"
+            },
+            "Browser tidying active: " + if (DeepCleanStats.intercepting) "yes" else "no",
+        )
+    }
+
     private fun isUsbAccessoryNow(): Boolean {
         return try {
             val sticky = registerReceiver(null, android.content.IntentFilter(USB_STATE))
@@ -324,14 +342,14 @@ class BlockerVpnService : VpnService() {
                 val resolverIps = (HARDCODED_RESOLVERS + HARDCODED_RESOLVERS_V6 + DNS_ADDRESS_V4 + DNS_ADDRESS_V6)
                     .mapNotNull { runCatching { java.net.InetAddress.getByName(it).address.toList() }.getOrNull() }.toHashSet()
                 val internalIp = InterceptProxy.INTERNAL_IP.toList()
-                // Page tidying needs the local certificate to be trusted by the browser; otherwise stay transparent.
-                val canIntercept = prefs.interceptBrowsers && CaInstall.isInstalled(this)
-                if (canIntercept) {
-                    intercept = InterceptProxy(CaInstall.get(this), { protect(it) }, { WebFilters.cosmeticRules(this) })
-                    intercept.userExcluded = prefs.webExcludedHosts
-                    intercept.start()
-                    Thread({ WebFilters.cosmeticRules(this) }, "cosmetic-parse").start()
-                }
+                // The proxy always runs with deep clean so the internal test page is reachable; browsers are
+                // only redirected into it (tidying) once the toggle is on and the certificate is trusted.
+                val tidy = prefs.interceptBrowsers && CaInstall.isInstalled(this)
+                intercept = InterceptProxy(CaInstall.get(this), { protect(it) }, { WebFilters.cosmeticRules(this) })
+                intercept.userExcluded = prefs.webExcludedHosts
+                intercept.statusProvider = { deepCleanStatusLines() }
+                intercept.start()
+                if (tidy) Thread({ WebFilters.cosmeticRules(this) }, "cosmetic-parse").start()
                 val browsers = BrowserUids(this)
                 relay = FullTunnel(
                     protectTcp = { protect(it) },
@@ -346,7 +364,7 @@ class BlockerVpnService : VpnService() {
                             // unreliable for UDP, and if a browser stays on HTTP/3 it bypasses tidying
                             // entirely. Dropping QUIC makes every client fall back to interceptable TCP;
                             // non-browser apps simply use TCP and still pass through untouched.
-                            val drop = intercept != null && dstPort == 443
+                            val drop = tidy && dstPort == 443
                             if (drop) DeepCleanStats.quicDropped++
                             return drop
                         }
@@ -354,6 +372,7 @@ class BlockerVpnService : VpnService() {
                         override fun intercept(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean {
                             if (intercept == null) return false
                             if (dst.toList() == internalIp) return true
+                            if (!tidy) return false
                             if (dstPort != 443 && dstPort != 80) return false
                             return browsers.isBrowserTcp(src, srcPort, dst, dstPort)
                         }
@@ -369,7 +388,7 @@ class BlockerVpnService : VpnService() {
                 relayThread = Thread(relay, "relay").also { it.isDaemon = true }
             }
             interceptProxy = intercept
-            DeepCleanStats.intercepting = intercept != null
+            DeepCleanStats.intercepting = intercept != null && prefs.interceptBrowsers && CaInstall.isInstalled(this)
             DeepCleanStats.deepClean = relay != null
             val p = DnsProxy(
                 pfd, upstream, prefs.blockMode, MTU, { onQuery(it) }, relay,

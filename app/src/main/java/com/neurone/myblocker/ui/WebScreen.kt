@@ -86,7 +86,7 @@ fun WebScreen(nav: Navigator) {
                     )
                 }
                 Text(
-                    "Not sure it is working? Open the test page in your browser: if it loads, everything up to the certificate is fine and it shows whether sample ad boxes get removed. A certificate warning means the certificate is not installed; a page that never loads means deep clean is off.",
+                    "Not sure it is working? Open the test page in your browser. It loads whenever Deep clean is on and lists exactly what is missing (toggle, certificate), then shows whether sample ad boxes get removed. If it never loads, Deep clean is off or the umbrella is down.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 10.dp),
                 )
@@ -94,7 +94,7 @@ fun WebScreen(nav: Navigator) {
                     Button(onClick = {
                         runCatching {
                             context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse("https://rules.adbrella.internal/test")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                Intent(Intent.ACTION_VIEW, Uri.parse("http://rules.adbrella.internal/test")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                             )
                         }.onFailure { Toast.makeText(context, "No browser found", Toast.LENGTH_SHORT).show() }
                     }) { Text("Test in your browser") }

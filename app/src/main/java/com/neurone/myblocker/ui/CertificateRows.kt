@@ -73,6 +73,15 @@ fun CertificateRows() {
             TextButton(enabled = exists && !installed, onClick = { CaInstall.openSecuritySettings(context) }) { Text("Open Settings") }
         }
         if (exists && !installed) {
+            val n = CaInstall.userCertCount
+            if (n > 0) {
+                Text(
+                    "Android's CA store lists $n user certificate(s), none is this one. It was probably installed as a \"VPN and app user certificate\" or is an older Adbrella certificate: install this file again, choosing CA certificate.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             Text(
                 "In Settings: Security and privacy › Other security settings › Install from device storage › CA certificate › Install anyway › pick ${CaInstall.FILE_NAME} in Downloads.",
                 style = MaterialTheme.typography.bodySmall,
