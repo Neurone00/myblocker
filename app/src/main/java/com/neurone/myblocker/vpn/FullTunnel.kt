@@ -83,7 +83,11 @@ class FullTunnel(
         Log.i(TAG, "relay started")
         try {
             while (running) {
-                selector.select(1000)
+                // With open flows we wake every 15s to expire idle ones; with none there is nothing to
+                // expire, so we block indefinitely and offer() wakes us. Either way an idle phone gets
+                // no periodic wakeups from the relay and the CPU can stay asleep.
+                val hasFlows = tcpFlows.isNotEmpty() || udpFlows.isNotEmpty()
+                if (hasFlows) selector.select(15_000) else selector.select()
                 if (!running) break
                 var n = 0
                 while (n++ < 512) {
@@ -102,7 +106,7 @@ class FullTunnel(
                     }
                 }
                 val now = System.currentTimeMillis()
-                if (now - lastSweep > 2000) {
+                if (now - lastSweep > 10_000) {
                     lastSweep = now
                     sweep(now)
                 }

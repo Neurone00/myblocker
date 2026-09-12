@@ -99,11 +99,34 @@ class InterceptTest {
         assertFalse(p.isExcluded("example.com"))
     }
 
-    @Test fun cspGetsTheRulesHostAppended() {
+    @Test fun cspGetsTheRulesHostAndNonce() {
         val p = InterceptProxy(ca = com.neurone.myblocker.tls.CertAuthority.load(Files.createTempDirectory("ca").toFile()), protect = { true }, rules = { CosmeticRules.EMPTY })
-        assertEquals("default-src 'self'; style-src 'self' https://rules.adbrella.internal", p.adjustCsp("default-src 'self'; style-src 'self'"))
-        assertEquals("style-src https://rules.adbrella.internal", p.adjustCsp("style-src 'none'"))
-        assertEquals("default-src 'self' cdn.x; style-src 'self' cdn.x https://rules.adbrella.internal", p.adjustCsp("default-src 'self' cdn.x"))
-        assertEquals("script-src 'self'", p.adjustCsp("script-src 'self'"))
+        val nonce = "ABC123"
+        val host = "https://rules.adbrella.internal"
+        val tok = "'nonce-ABC123'"
+
+        // Host-strict style-src (inline blocked): gets the host AND a nonce so our inline style runs.
+        run {
+            val out = p.adjustCsp("default-src 'self'; style-src 'self'", nonce)
+            assertTrue(out.contains("style-src 'self' $host $tok") || out.contains("style-src 'self' $tok $host"))
+            assertTrue(out.contains("script-src") && out.contains(tok))
+        }
+        // 'unsafe-inline' present: nonce must NOT be added (it would disable the site's own inline).
+        run {
+            val out = p.adjustCsp("default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'", nonce)
+            assertFalse("style keeps unsafe-inline, no nonce", out.substringAfter("style-src").substringBefore(";").contains("nonce-"))
+            assertFalse("script keeps unsafe-inline, no nonce", out.substringAfter("script-src").contains("nonce-"))
+            assertTrue(out.contains(host)) // host still added for the external stylesheet
+        }
+        // 'none' style-src is replaced with our host + nonce.
+        run {
+            val out = p.adjustCsp("style-src 'none'", nonce)
+            assertTrue(out.contains("style-src $host $tok") || out.contains("style-src $tok $host"))
+        }
+        // No style-src: inherits from default-src and adds host + nonce.
+        run {
+            val out = p.adjustCsp("default-src 'self' cdn.x", nonce)
+            assertTrue(out.contains("style-src") && out.contains("cdn.x") && out.contains(host) && out.contains(tok))
+        }
     }
 }

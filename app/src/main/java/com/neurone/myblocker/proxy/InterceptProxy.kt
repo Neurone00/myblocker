@@ -278,15 +278,16 @@ class InterceptProxy(
                                 canInject = true // we hold the plain HTML now; drop the encoding header below
                             }
                         }
+                        val nonce = randomNonce()
                         if (canInject) {
-                            val injected = inject(bytes, pageHost)
+                            val injected = inject(bytes, pageHost, nonce)
                             if (injected !== bytes) pagesTidied++
                             bytes = injected
                             resp.remove("Content-Encoding")
                         }
                         resp.remove("Transfer-Encoding")
                         resp.set("Content-Length", bytes.size.toString())
-                        resp.headers.replaceAll { (k, v) -> if (k.equals("Content-Security-Policy", true)) k to adjustCsp(v) else k to v }
+                        resp.headers.replaceAll { (k, v) -> if (k.equals("Content-Security-Policy", true)) k to adjustCsp(v, nonce) else k to v }
                         cout.write(resp.bytes())
                         cout.write(bytes)
                         cout.flush()
@@ -407,10 +408,19 @@ class InterceptProxy(
 
     // ------------------------------------------------------------- injection
 
-    private fun inject(html: ByteArray, pageHost: String): ByteArray {
+    private fun inject(html: ByteArray, pageHost: String, nonce: String): ByteArray {
         val v = rules().version
-        val snippet = ("<link rel=\"stylesheet\" href=\"https://$INTERNAL_HOST/g.css?v=$v\">" +
-            "<link rel=\"stylesheet\" href=\"https://$INTERNAL_HOST/s/${pageHost.lowercase()}.css?v=$v\">").toByteArray(Charsets.US_ASCII)
+        val n = " nonce=\"$nonce\""
+        // Three layers, each independent so one failing still helps:
+        //  - inline compact CSS for the most common ad slots (works with no external request),
+        //  - external links to the full generic + per-site EasyList (best coverage when reachable),
+        //  - an inline collapser that removes leftover empty ad placeholders (e.g. grey "ADV" boxes).
+        val snippet = (
+            "<style$n>$INLINE_CSS</style>" +
+                "<link rel=\"stylesheet\"$n href=\"https://$INTERNAL_HOST/g.css?v=$v\">" +
+                "<link rel=\"stylesheet\"$n href=\"https://$INTERNAL_HOST/s/${pageHost.lowercase()}.css?v=$v\">" +
+                "<script$n>$COLLAPSER_JS</script>"
+            ).toByteArray(Charsets.UTF_8)
         val lower = String(html, 0, minOf(html.size, 512 * 1024), Charsets.ISO_8859_1).lowercase()
         var at = lower.indexOf("</head>")
         if (at < 0) {
@@ -435,22 +445,55 @@ class InterceptProxy(
         return out
     }
 
-    /** Adds the rules host to style-src (or derives one from default-src) so the injected links load. */
-    fun adjustCsp(value: String): String {
+    /**
+     * Lets the injected style/script run under the site's CSP without weakening it for the site:
+     *  - style-src gains the internal rules host (for the external stylesheets), and
+     *  - a nonce is added to style-src and script-src ONLY where inline is currently blocked, so a
+     *    site relying on 'unsafe-inline' keeps it (adding a nonce would otherwise disable it).
+     * The nonce matches the one placed on the injected tags.
+     */
+    fun adjustCsp(value: String, nonce: String): String {
         val directives = value.split(';').map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
         val origin = "https://$INTERNAL_HOST"
-        val styleIdx = directives.indexOfFirst { it.startsWith("style-src", true) && (it.length == 9 || it[9] == ' ') }
-        if (styleIdx >= 0) {
-            val d = directives[styleIdx]
-            directives[styleIdx] = if (d.contains("'none'")) "style-src $origin" else "$d $origin"
-        } else {
-            val def = directives.firstOrNull { it.startsWith("default-src", true) }
-            if (def != null) {
-                val values = def.substring("default-src".length).trim().replace("'none'", "")
-                directives.add("style-src $values $origin".replace("  ", " "))
+        val nonceTok = "'nonce-$nonce'"
+
+        fun tokensOf(name: String): List<String>? {
+            val d = directives.firstOrNull { it.startsWith(name, true) && (it.length == name.length || it[name.length] == ' ') }
+                ?: directives.firstOrNull { it.startsWith("default-src", true) && (it.length == 11 || it[11] == ' ') }
+            return d?.trim()?.split(Regex("\\s+"))?.drop(1)
+        }
+        // Inline is already allowed when unsafe-inline is present and not neutralised by a nonce/hash.
+        fun inlineAllowed(name: String): Boolean {
+            val toks = tokensOf(name) ?: return false // no CSP for this type -> inline allowed anyway (handled by caller)
+            val hasUnsafe = toks.any { it.equals("'unsafe-inline'", true) }
+            val hasNonceOrHash = toks.any { it.startsWith("'nonce-", true) || it.startsWith("'sha", true) }
+            return hasUnsafe && !hasNonceOrHash
+        }
+        fun ensure(name: String, extra: List<String>) {
+            val idx = directives.indexOfFirst { it.startsWith(name, true) && (it.length == name.length || it[name.length] == ' ') }
+            if (idx >= 0) {
+                var d = directives[idx]
+                if (d.contains("'none'", true)) d = name
+                for (tok in extra) if (!d.contains(tok, true)) d += " $tok"
+                directives[idx] = d
+            } else {
+                // Inherit from default-src if present, otherwise a fresh directive.
+                val base = tokensOf(name)?.filterNot { it.equals("'none'", true) } ?: emptyList()
+                directives.add((listOf(name) + base + extra).joinToString(" "))
             }
         }
+
+        val styleExtra = mutableListOf(origin)
+        if (!inlineAllowed("style-src")) styleExtra.add(nonceTok)
+        ensure("style-src", styleExtra)
+        if (!inlineAllowed("script-src")) ensure("script-src", listOf(nonceTok))
         return directives.joinToString("; ")
+    }
+
+    private fun randomNonce(): String {
+        val b = ByteArray(16)
+        java.security.SecureRandom().nextBytes(b)
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(b)
     }
 
     // ------------------------------------------------------------- internal rules host
@@ -500,6 +543,45 @@ class InterceptProxy(
         private const val MAX_HTML = 4 * 1024 * 1024
         const val INTERNAL_HOST = "rules.adbrella.internal"
         val INTERNAL_IP: ByteArray = byteArrayOf(10, 111, 222.toByte(), 3)
+
+        /** Compact, high-value ad-slot selectors, inlined so tidying works even if the external list cannot load. */
+        const val INLINE_CSS =
+            "ins.adsbygoogle,[id^=google_ads_],[id^=div-gpt-ad],[id*=div-gpt-ad],iframe[src*=doubleclick]," +
+                "iframe[src*=googlesyndication],iframe[src*=amazon-adsystem],iframe[src*=adnxs],[data-ad-slot]," +
+                "[data-google-query-id],[class*=adsbygoogle]{display:none!important}"
+
+        /**
+         * In-page collapser: removes leftover ad slots that a hosts/DNS blocker empties but leaves behind,
+         * including grey "ADV" placeholder boxes that regional lists would otherwise be needed for. It is
+         * deliberately conservative (only ad-marked elements with no real content) and self-limiting: the
+         * observer stops after a short window so it costs no battery once the page settles.
+         */
+        val COLLAPSER_JS: String = """
+(function(){try{
+var RE=/(^|[^a-z])(adv|ads|advert|advertis|advertisement|reklam|werbung|publicidad|pubblicit|sponsor|banner|billboard|leaderboard)([^a-z]|${'$'})/i;
+var LABEL=/^\s*(adv|ads|advert|advertisement|advertising|publicidad|pubblicit[aà]|sponsor|sponsored|werbung|reklama|annuncio|annunci|pubblicità)\s*${'$'}/i;
+function cls(el){var c=el.className;return typeof c==='string'?c:(c&&c.baseVal)||'';}
+function adish(el){return RE.test(el.id+' '+cls(el))||el.hasAttribute('data-ad-slot')||el.hasAttribute('data-ad-client')||el.hasAttribute('data-google-query-id')||el.hasAttribute('data-ad');}
+function empty(el){
+ if(el.querySelector('img[src],picture,video,canvas,form,input,button,h1,h2,h3,h4,article,p'))return false;
+ var t=(el.textContent||'').replace(/\s+/g,' ').trim();
+ if(t.length>25&&!LABEL.test(t))return false;
+ var ifr=el.querySelector('iframe');
+ return true;
+}
+function hide(el){try{if(el&&el.style&&el.getAttribute('data-adb')!=='1'){el.style.setProperty('display','none','important');el.setAttribute('data-adb','1');}}catch(e){}}
+function sweep(){try{
+ var s=document.querySelectorAll('ins.adsbygoogle,[id^=google_ads_],[id^=div-gpt-ad],[id*=div-gpt-ad],iframe[src*=doubleclick],iframe[src*=googlesyndication],iframe[src*=amazon-adsystem],iframe[src*=adnxs],[data-ad-slot],[data-google-query-id]');
+ for(var i=0;i<s.length;i++)hide(s[i]);
+ var d=document.querySelectorAll('div,section,aside,ul,li,figure');
+ for(var j=0;j<d.length;j++){var el=d[j];if(el.getAttribute('data-adb')==='1')continue;if(adish(el)&&empty(el))hide(el);}
+}catch(e){}}
+function run(){sweep();}
+if(document.readyState!=='loading')run();else document.addEventListener('DOMContentLoaded',run);
+var n=0,mo;try{mo=new MutationObserver(function(){if(n++>300)return;sweep();});mo.observe(document.documentElement||document,{childList:true,subtree:true});}catch(e){}
+setTimeout(function(){try{mo&&mo.disconnect();}catch(e){}sweep();},12000);
+}catch(e){}})();
+""".trim()
 
         /**
          * Hosts that pin certificates or must not be touched for safety. Browsing to these through

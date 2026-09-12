@@ -50,11 +50,15 @@ class DnsProxy(
     @Volatile private var running = true
     private val input = FileInputStream(tun.fileDescriptor)
     private val output = FileOutputStream(tun.fileDescriptor)
+    // Self-pipe so stop() can wake a blocking poll() without any periodic timeout.
+    private var wakeRead: java.io.FileDescriptor? = null
+    private var wakeWrite: java.io.FileDescriptor? = null
     private val workers = ThreadPoolExecutor(
-        4, 12, 30, TimeUnit.SECONDS, LinkedBlockingQueue(512),
+        // Idle worker threads die after 30s (core threads included), so nothing lingers when there is no DNS.
+        2, 12, 30, TimeUnit.SECONDS, LinkedBlockingQueue(512),
         { r -> Thread(r, "dns-upstream").apply { isDaemon = true } },
         ThreadPoolExecutor.DiscardOldestPolicy(),
-    )
+    ).apply { allowCoreThreadTimeOut(true) }
 
     @Volatile var forwarded: Long = 0; private set
     @Volatile var answeredLocally: Long = 0; private set
@@ -62,17 +66,31 @@ class DnsProxy(
 
     override fun run() {
         val buffer = ByteArray(65535)
-        val pollFd = StructPollfd()
-        pollFd.fd = tun.fileDescriptor
-        pollFd.events = OsConstants.POLLIN.toShort()
-        val polls = arrayOf(pollFd)
+        val tunFd = StructPollfd()
+        tunFd.fd = tun.fileDescriptor
+        tunFd.events = OsConstants.POLLIN.toShort()
+        val wakeFd = StructPollfd()
+        runCatching {
+            val pipe = Os.pipe()
+            wakeRead = pipe[0]
+            wakeWrite = pipe[1]
+        }
+        // Block forever on the tunnel; the wake pipe is the only other reason to return, so an
+        // idle phone gets zero wakeups from this loop and the CPU can stay in deep sleep.
+        val polls: Array<StructPollfd> = wakeRead?.let {
+            wakeFd.fd = it
+            wakeFd.events = OsConstants.POLLIN.toShort()
+            arrayOf(tunFd, wakeFd)
+        } ?: arrayOf(tunFd)
         Log.i(TAG, "proxy loop started, upstream=${upstream.description}")
         while (running) {
             try {
-                pollFd.revents = 0
-                val ready = Os.poll(polls, POLL_TIMEOUT_MS)
-                if (ready <= 0) continue
-                val revents = pollFd.revents.toInt()
+                tunFd.revents = 0
+                wakeFd.revents = 0
+                Os.poll(polls, -1) // no timeout: return only on a packet or a stop signal
+                if (!running) break
+                if (wakeFd.revents.toInt() and OsConstants.POLLIN != 0) break
+                val revents = tunFd.revents.toInt()
                 if (revents and (OsConstants.POLLHUP or OsConstants.POLLERR or OsConstants.POLLNVAL) != 0) {
                     Log.w(TAG, "tun closed (revents=$revents)")
                     break
@@ -96,11 +114,15 @@ class DnsProxy(
         relay?.stop()
         workers.shutdownNow()
         runCatching { upstream.close() }
+        runCatching { wakeRead?.let { Os.close(it) } }
+        runCatching { wakeWrite?.let { Os.close(it) } }
         Log.i(TAG, "proxy loop ended")
     }
 
     fun stop() {
         running = false
+        // Wake the blocking poll() so the loop exits at once instead of on the next packet.
+        runCatching { wakeWrite?.let { Os.write(it, byteArrayOf(1), 0, 1) } }
     }
 
     val isRunning: Boolean get() = running
@@ -179,6 +201,5 @@ class DnsProxy(
 
     companion object {
         private const val TAG = "DnsProxy"
-        private const val POLL_TIMEOUT_MS = 500
     }
 }

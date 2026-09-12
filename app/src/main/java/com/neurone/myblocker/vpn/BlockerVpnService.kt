@@ -339,7 +339,7 @@ class BlockerVpnService : VpnService() {
         const val TUN_ADDRESS_V6 = "fd53:4d59:424c::1"
         const val DNS_ADDRESS_V6 = "fd53:4d59:424c::2"
         private const val MAX_RESTARTS = 5
-        private const val NOTIFICATION_REFRESH_MS = 30_000L
+        private const val NOTIFICATION_REFRESH_MS = 120_000L // Handler tick, no wakelock; only refreshes the count while the CPU is already awake
 
         @Volatile var isRunning: Boolean = false
             private set(v) { field = v; running.value = v }
