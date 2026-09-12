@@ -82,6 +82,11 @@ class Prefs private constructor(context: Context) {
         get() = sp.getBoolean(KEY_BOOT, true)
         set(v) = sp.edit().putBoolean(KEY_BOOT, v).apply()
 
+    /** Android Auto refuses to start with any VPN active; pause protection while it is projecting. */
+    var pauseForAndroidAuto: Boolean
+        get() = sp.getBoolean(KEY_PAUSE_CAR, true)
+        set(v) = sp.edit().putBoolean(KEY_PAUSE_CAR, v).apply()
+
     var logEnabled: Boolean
         get() = sp.getBoolean(KEY_LOG, true)
         set(v) = sp.edit().putBoolean(KEY_LOG, v).apply()
@@ -186,6 +191,7 @@ class Prefs private constructor(context: Context) {
         private const val KEY_CUSTOM_DNS = "custom_dns"
         private const val KEY_BLOCK_MODE = "block_mode"
         private const val KEY_BOOT = "start_at_boot"
+        private const val KEY_PAUSE_CAR = "pause_for_android_auto"
         private const val KEY_LOG = "log_enabled"
         private const val KEY_SAFETY = "safety_list"
         private const val KEY_ACHIEVEMENT_NOTIFY = "achievement_notify"

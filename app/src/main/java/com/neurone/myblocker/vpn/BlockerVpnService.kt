@@ -43,6 +43,9 @@ class BlockerVpnService : VpnService() {
     private var restarts = 0
     /** Incremented for every tunnel thread; lets a dying thread tell whether it has been superseded. */
     @Volatile private var generation = 0
+    private var carConnection: com.neurone.myblocker.system.CarConnection? = null
+    /** True while protection is held down because Android Auto is projecting (it rejects any VPN). */
+    @Volatile private var pausedForCar = false
     private lateinit var appNames: AppNames
     private val logExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "query-log").apply { isDaemon = true } }
     private val handler = Handler(Looper.getMainLooper())
@@ -59,6 +62,36 @@ class BlockerVpnService : VpnService() {
         super.onCreate()
         appNames = AppNames(this)
         StatsStore.init(this)
+        if (Prefs.get(this).pauseForAndroidAuto) {
+            carConnection = com.neurone.myblocker.system.CarConnection(this) { projecting -> handler.post { onCarState(projecting) } }
+            carConnection?.start()
+        }
+    }
+
+    /** Android Auto rejects any active VPN, so hold protection down while it projects and restore after. */
+    private fun onCarState(projecting: Boolean) {
+        if (!Prefs.get(this).pauseForAndroidAuto) return
+        if (projecting && !pausedForCar) {
+            pausedForCar = true
+            state = "Paused for Android Auto"
+            Log.i(TAG, "Android Auto connected: pausing protection")
+            stopRequested = true
+            proxy?.stop()
+            runCatching { tun?.close() }
+            tun = null
+            isRunning = false
+            isStarting = false
+            broadcastState()
+            runCatching { Notifications.updateRunning(this) }
+        } else if (!projecting && pausedForCar) {
+            pausedForCar = false
+            Log.i(TAG, "Android Auto disconnected: resuming protection")
+            if (Prefs.get(this).wantsProtection) {
+                stopRequested = false
+                startForegroundCompat()
+                startVpn()
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -91,6 +124,8 @@ class BlockerVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        carConnection?.stop()
+        carConnection = null
         stopVpn()
         StatsStore.flush()
         logExecutor.shutdown()
@@ -108,6 +143,14 @@ class BlockerVpnService : VpnService() {
 
     @Synchronized
     private fun startVpn() {
+        // While Android Auto is projecting, stay down no matter what asks us to start (tile, always-on
+        // restart, boot). We come back automatically when the car disconnects.
+        if (Prefs.get(this).pauseForAndroidAuto && (pausedForCar || com.neurone.myblocker.system.CarConnection.isProjecting(this))) {
+            pausedForCar = true
+            state = "Paused for Android Auto"
+            broadcastState()
+            return
+        }
         if (thread?.isAlive == true) return
         stopRequested = false
         isStarting = true

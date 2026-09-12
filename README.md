@@ -41,6 +41,7 @@ The version scheme is `1.0.0-b<build number>`; the build number is also the Andr
 - **Encrypted upstream**: Quad9, Cloudflare, Google or AdGuard over DNS-over-HTTPS, a custom DoH URL, or plain DNS. Automatic fallback to plain DNS if DoH is unreachable.
 - **Stats & gamification**: today / total / streak, 24-hour and 7-day charts, most blocked domains and apps, estimated data saved, XP levels (Light drizzle → Desert) and badges with notifications.
 - **Always on**: foreground service with auto-restart, starts at boot, Quick Settings tile, Always-on VPN support.
+- **Android Auto aware**: Android Auto refuses to start with any VPN active (error 21) and detects the VPN itself, so a bypass cannot help. Adbrella pauses protection automatically while Android Auto projects and resumes on disconnect (Settings → Pause for Android Auto).
 - IPv4 and IPv6, TCP probes to the fake resolver are refused immediately so Private DNS "Automatic" falls back without delay.
 
 ## What it cannot do (honest limits of DNS filtering)

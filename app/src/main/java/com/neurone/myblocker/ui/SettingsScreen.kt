@@ -63,6 +63,12 @@ fun SettingsScreen(nav: Navigator) {
             SettingRow("Keep the umbrella open", "$setupDone of 3 phone settings done", onClick = { nav.push(Screen.KeepRunning) })
             RowDivider()
             SwitchRow("Open after a restart", "Turns protection back on when the phone reboots", prefs.startAtBoot) { prefs.startAtBoot = it }
+            RowDivider()
+            SwitchRow(
+                "Pause for Android Auto",
+                "Android Auto refuses to start with any VPN active. Adbrella pauses itself while the car is connected and resumes after.",
+                remember(changes) { prefs.pauseForAndroidAuto },
+            ) { prefs.pauseForAndroidAuto = it }
         }
         SectionCard {
             SwitchRow(
@@ -260,6 +266,11 @@ fun AboutScreen(nav: Navigator) {
             "If an app breaks",
             "Open Activity, find the app, tap the bounced domain and choose Allow. Your allowlist beats every blocklist.",
             "For stubborn apps, add them under Settings › Apps that skip the umbrella.",
+        )
+        AboutSection(
+            "Android Auto",
+            "Android Auto refuses to start whenever any VPN is active (\"communication error 21\"), and it detects the VPN itself, so a per-app bypass cannot help. Adbrella therefore pauses protection automatically while Android Auto is projecting and resumes when you disconnect. Leave \"Pause for Android Auto\" on.",
+            "If you use Always-on VPN, keep \"Block connections without VPN\" off, otherwise the phone has no network while paused and Android Auto still cannot connect.",
         )
         AboutSection(
             "Privacy",

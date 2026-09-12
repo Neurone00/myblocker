@@ -22,6 +22,8 @@
         <intent>
             <action android:name="com.samsung.android.sbrowser.contentBlocker.ACTION_SETTING" />
         </intent>
+        <package android:name="com.google.android.projection.gearhead" />
+        <provider android:authorities="androidx.car.app.connection" />
     </queries>
 
     <application
