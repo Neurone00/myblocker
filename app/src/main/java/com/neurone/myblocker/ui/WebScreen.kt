@@ -3,6 +3,7 @@ package com.neurone.myblocker.ui
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -90,15 +91,18 @@ fun WebScreen(nav: Navigator) {
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 10.dp),
                 )
-                Row {
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     Button(onClick = {
                         runCatching {
                             context.startActivity(
                                 Intent(Intent.ACTION_VIEW, Uri.parse("http://rules.adbrella.internal/test")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                             )
                         }.onFailure { Toast.makeText(context, "No browser found", Toast.LENGTH_SHORT).show() }
-                    }) { Text("Test in your browser") }
-                    TextButton(onClick = { nav.push(Screen.Advanced) }) { Text("Open Advanced") }
+                    }) { Text("Test in browser") }
+                    TextButton(onClick = { nav.push(Screen.Advanced) }) { Text("Advanced") }
                 }
             }
         }

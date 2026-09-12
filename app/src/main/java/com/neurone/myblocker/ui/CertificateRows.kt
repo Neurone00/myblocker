@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,8 +22,8 @@ import com.neurone.myblocker.vpn.BlockerVpnService
 
 /**
  * Status and actions for the local certificate that lets deep clean open browser HTTPS.
- * Android 11+ only installs CA certificates from a file via Settings, so the flow is:
- * save to Downloads, open Settings, pick the file.
+ * Without it in Android's CA store nothing can be tidied, so installing it is the one action
+ * on this row that matters: it is handed straight to the system certificate installer.
  */
 @Composable
 fun CertificateRows() {
@@ -30,6 +31,7 @@ fun CertificateRows() {
     val tick by rememberTick(3000)
     var busy by remember { mutableStateOf(false) }
     var refresh by remember { mutableStateOf(0) }
+    var hint by remember { mutableStateOf<String?>(null) }
     val exists = remember(tick, refresh) { CaInstall.exists(context) }
     val installed = remember(tick, refresh) { exists && CaInstall.isInstalled(context) }
     val fingerprint = remember(exists, refresh) { if (exists) CaInstall.fingerprint(context) else "" }
@@ -41,11 +43,10 @@ fun CertificateRows() {
         Text(
             when {
                 installed -> "Installed. With Deep clean and \"Tidy pages in browsers\" on, pages in Chrome, Brave and Samsung Internet get their empty ad boxes removed; it takes effect on its own."
-                exists -> "Created, not yet installed. Save it to Downloads, then install it from Settings."
-                else -> "Not created yet. Adbrella makes a private certificate that stays on this phone; you install only its public half."
+                else -> "Not installed, so browsers are not being tidied at all. Adbrella keeps the private half on this phone and installs only the public certificate."
             },
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (installed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
         )
         if (fingerprint.isNotEmpty()) {
             Text(
@@ -53,6 +54,44 @@ fun CertificateRows() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        if (!installed) {
+            val n = CaInstall.userCertCount
+            if (n > 0) {
+                Text(
+                    "Android's CA store lists $n user certificate(s), none of them this one: it was probably installed as a \"VPN and app user certificate\", which browsers do not read. Install it again and choose CA certificate.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            Row(Modifier.padding(top = 6.dp)) {
+                Button(enabled = !busy, onClick = {
+                    busy = true
+                    Thread {
+                        // Creating the CA takes about a second the first time; keep it off the main thread.
+                        runCatching { CaInstall.get(context) }
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            busy = false
+                            refresh++
+                            hint = when (CaInstall.installNow(context)) {
+                                "installer" -> "Android is asking to install it now. If it offers a choice of what to use it for, pick CA certificate, then confirm the warning."
+                                "keychain" -> "Name it Adbrella and confirm. If it asks what to use it for, pick CA certificate."
+                                "settings" -> "Settings is open: Other security settings › Install from device storage › CA certificate › pick ${CaInstall.FILE_NAME} (save it to Downloads first, below)."
+                                else -> "Could not open the certificate installer. Use \"Save to Downloads\" and install it from Settings."
+                            }
+                        }
+                    }.start()
+                }) { Text(if (busy) "Preparing…" else "Install certificate") }
+            }
+            hint?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
         }
         Row(Modifier.padding(top = 4.dp)) {
             TextButton(enabled = !busy, onClick = {
@@ -69,25 +108,8 @@ fun CertificateRows() {
                         ).show()
                     }
                 }.start()
-            }) { Text(if (busy) "Working…" else if (exists) "Save to Downloads" else "Create and save to Downloads") }
-            TextButton(enabled = exists && !installed, onClick = { CaInstall.openSecuritySettings(context) }) { Text("Open Settings") }
-        }
-        if (exists && !installed) {
-            val n = CaInstall.userCertCount
-            if (n > 0) {
-                Text(
-                    "Android's CA store lists $n user certificate(s), none is this one. It was probably installed as a \"VPN and app user certificate\" or is an older Adbrella certificate: install this file again, choosing CA certificate.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            Text(
-                "In Settings: Security and privacy › Other security settings › Install from device storage › CA certificate › Install anyway › pick ${CaInstall.FILE_NAME} in Downloads.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+            }) { Text("Save to Downloads") }
+            TextButton(onClick = { CaInstall.openSecuritySettings(context) }) { Text("Open Settings") }
         }
     }
 }

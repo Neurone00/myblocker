@@ -577,6 +577,7 @@ class InterceptProxy(
      * like the boxes news sites leave behind and reports whether the collapser removed them.
      */
     private fun testPage(tls: Boolean): String {
+        val active = DeepCleanStats.intercepting
         val status = runCatching { statusProvider?.invoke() }.getOrNull().orEmpty()
         val statusHtml = if (status.isEmpty()) "" else "<ul>" + status.joinToString("") { "<li>" + it.replace("&", "&amp;").replace("<", "&lt;") + "</li>" } + "</ul>"
         val certCard = if (tls)
@@ -589,15 +590,17 @@ class InterceptProxy(
 .ph{background:#dedede;color:#9a9a9a;text-align:center;font-size:34px;line-height:120px;min-height:120px;margin:10px 0}.ok{color:#1b7f3b;font-weight:600}.bad{color:#b3261e;font-weight:600}small{color:#666}#t3::before{content:"Pubblicità"}</style></head>
 <body><div class="card"><h1>☂ Adbrella can see this browser</h1><p>This page comes from Adbrella itself, so Deep clean is routing this browser's traffic.</p>$statusHtml</div>
 $certCard
-<div class="card"><p>Three placeholders shaped like the boxes news sites leave behind. They should vanish within a second:</p>
+<div class="card"><p>Three placeholders shaped like the boxes news sites leave behind, removed by the script running <i>in this page</i> — a check of the collapser itself, not proof that real sites are reached:</p>
 <div id="t1" class="adv-box ph">ADV</div>
 <div id="t2" class="box-top ph"><ins class="adsbygoogle" style="display:block;height:120px"></ins></div>
 <div id="t3" class="slot-top ph"></div>
 <p id="v">Checking…</p></div>
 <div class="card"><small>Since the tunnel started: browser connections ${connections}, pages tidied ${pagesTidied}, certificate refused by a browser ${handshakeFailures} times.</small></div>
 <script>$COLLAPSER_JS</script>
-<script>setTimeout(function(){var h=function(i){var e=document.getElementById(i);return e&&e.getAttribute('data-adb')?1:0;};var n=h('t1')+h('t2')+h('t3');var v=document.getElementById('v');
-if(n===3){v.textContent='All three removed. Tidying works in this browser; if a site still shows a box, its markup is one the collapser does not recognise yet.';v.className='ok';}
+<script>var ACTIVE=$active;
+setTimeout(function(){var h=function(i){var e=document.getElementById(i);return e&&e.getAttribute('data-adb')?1:0;};var n=h('t1')+h('t2')+h('t3');var v=document.getElementById('v');
+if(n===3&&ACTIVE){v.textContent='All three removed, and this browser really is being tidied. If a site still shows a box, its markup is one the collapser does not recognise yet — say so and it gets added.';v.className='ok';}
+else if(n===3){v.textContent='The collapser removed all three, but this page ran the script itself: real pages are NOT being tidied yet, because the certificate above is not installed.';v.className='bad';}
 else{v.textContent='Only '+n+' of 3 removed ('+(h('t1')?'':'label ')+(h('t2')?'':'slot ')+(h('t3')?'':'css-label ')+'left). The script runs but misses that shape.';v.className='bad';}},1500);</script>
 </body></html>
 """.trim()

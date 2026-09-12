@@ -111,7 +111,7 @@ fun AdvancedScreen(nav: Navigator) {
             RowDivider()
             SwitchRow(
                 "Tidy pages in browsers",
-                "Opens browser HTTPS with the certificate below to hide empty ad boxes. Only Chrome, Brave, Samsung Internet and similar; other apps are never touched.",
+                "Opens browser HTTPS with the certificate below to hide empty ad boxes. Needs that certificate installed or nothing is tidied. Only Chrome, Brave, Samsung Internet and similar; other apps are never touched.",
                 remember(changes) { prefs.interceptBrowsers },
             ) {
                 prefs.interceptBrowsers = it
