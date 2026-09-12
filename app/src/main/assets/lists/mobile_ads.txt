@@ -1,0 +1,143 @@
+# MyBlocker curated list: endpoints used by in-app advertising SDKs.
+# Blocking these makes banners, interstitials and rewarded ads fail to load
+# ("no fill"). Analytics/attribution SDKs are deliberately NOT here because
+# some apps break deep links or logins without them; the big lists cover those.
+# Domains match themselves and every subdomain.
+
+# Google AdMob / Ad Manager / AdSense (Play, Firebase and login are untouched)
+googleads.g.doubleclick.net
+pubads.g.doubleclick.net
+securepubads.g.doubleclick.net
+stats.g.doubleclick.net
+ad.doubleclick.net
+static.doubleclick.net
+pagead2.googlesyndication.com
+tpc.googlesyndication.com
+ade.googlesyndication.com
+googleadservices.com
+adservice.google.com
+adservice.google.it
+adservice.google.co.uk
+adservice.google.de
+adservice.google.fr
+adservice.google.es
+admob.com
+adclick.g.doubleclick.net
+
+# Unity Ads / Unity LevelPlay
+unityads.unity3d.com
+auction.unityads.unity3d.com
+config.unityads.unity3d.com
+adserver.unityads.unity3d.com
+publisher-config.unityads.unity3d.com
+
+# AppLovin / MAX
+applovin.com
+applvn.com
+
+# ironSource / Supersonic
+supersonicads.com
+supersonic.com
+ironsrc.mobi
+ironsrc.com
+
+# Vungle / Liftoff
+vungle.com
+liftoff.io
+
+# Chartboost
+chartboost.com
+
+# InMobi
+inmobi.com
+inmobicdn.net
+
+# Meta Audience Network (graph.facebook.com is intentionally not blocked)
+an.facebook.com
+
+# Mintegral / Mobvista
+mintegral.com
+rayjump.com
+mobvista.com
+
+# Pangle (ByteDance ads)
+pangle.io
+pangleglobal.com
+
+# Digital Turbine / Fyber / Inneractive
+fyber.com
+inner-active.mobi
+inner-active.com
+
+# Tapjoy
+tapjoy.com
+tapjoyads.com
+
+# AdColony
+adcolony.com
+
+# Amazon Publisher Services
+amazon-adsystem.com
+
+# Smaato, PubMatic, OpenX, Magnite, Index Exchange, AppNexus
+smaato.net
+smaato.com
+pubmatic.com
+openx.net
+rubiconproject.com
+casalemedia.com
+adnxs.com
+
+# Start.io (StartApp)
+startappservice.com
+startappexchange.com
+startapp.com
+
+# Appodeal
+appodeal.com
+appbaqend.com
+
+# Ogury
+ogury.io
+ogury.co
+ogury.com
+
+# Yandex Ads
+yandexadexchange.net
+mobile.yandexadexchange.net
+adfox.ru
+
+# Samsung ads (Samsung account, updates and Galaxy Store stay reachable)
+samsungads.com
+samsungadhub.com
+
+# Huawei / Xiaomi ad services
+adx-drcn.op.hicloud.com
+ads-dre.op.hicloud.com
+adx-dra.op.hicloud.com
+api.ad.xiaomi.com
+data.mistat.xiaomi.com
+tracking.miui.com
+ad.xiaomi.com
+
+# Misc mobile ad networks
+mopub.com
+bidmachine.io
+criteo.com
+criteo.net
+taboola.com
+outbrain.com
+moloco.com
+pubnative.net
+kidoz.net
+superawesome.tv
+aax-eu.amazon-adsystem.com
+adsrvr.org
+ads.linkedin.com
+ads.twitter.com
+ads.tiktok.com
+ads-api.tiktok.com
+business-api.tiktok.com
+ads.pinterest.com
+ad.mail.ru
+ads.reddit.com
