@@ -74,8 +74,8 @@ class InterceptEndToEndTest {
         val trust = trustingContext(ca)
         SSLContext.setDefault(trust) // the proxy verifies origins with the default context
 
-        // --- origin: HTTPS server for "localhost" answering HTML, once gzip-compressed and once plain/chunked.
-        val originCtx = ca.forHost("localhost").sslContext
+        // --- origin: HTTPS server for "test.local" answering HTML, once gzip-compressed and once plain/chunked.
+        val originCtx = ca.forHost("test.local").sslContext
         val origin = originCtx.serverSocketFactory.createServerSocket(0, 5, InetAddress.getLoopbackAddress()) as SSLServerSocket
         val html = "<!doctype html><html><head><title>t</title></head><body><div class=\"ad-banner\">x</div></body></html>"
         val requestsSeen = ArrayList<String>()
@@ -120,7 +120,7 @@ class InterceptEndToEndTest {
 
         // --- proxy with a tiny rule set
         val rulesFile = Files.createTempFile("rules", ".txt").toFile()
-        rulesFile.writeText("[Adblock Plus 2.0]\n##.ad-banner\nlocalhost##.sponsored\n")
+        rulesFile.writeText("[Adblock Plus 2.0]\n##.ad-banner\ntest.local##.sponsored\n")
         val rules = CosmeticRules.parse(rulesFile)
         val proxy = InterceptProxy(ca, protect = { true }, rules = { rules })
         val proxyErrors = java.util.Collections.synchronizedList(ArrayList<String>())
@@ -156,17 +156,17 @@ class InterceptEndToEndTest {
         }
 
         // 1. plain HTML with Content-Length
-        val r1 = viaProxy("localhost", originAddr, origin.localPort, "GET / HTTP/1.1\r\nHost: localhost\r\nAccept-Encoding: br, gzip\r\nConnection: close\r\n\r\n")
+        val r1 = viaProxy("test.local", originAddr, origin.localPort, "GET / HTTP/1.1\r\nHost: test.local\r\nAccept-Encoding: br, gzip\r\nConnection: close\r\n\r\n")
         assertTrue(r1.head.startsWith("HTTP/1.1 200"))
         val body1 = String(r1.body)
         assertTrue(body1.contains("https://rules.adbrella.internal/g.css?v=${rules.version}"))
-        assertTrue(body1.contains("https://rules.adbrella.internal/s/localhost.css?v=${rules.version}"))
+        assertTrue(body1.contains("https://rules.adbrella.internal/s/test.local.css?v=${rules.version}"))
         assertTrue(body1.indexOf("<link") < body1.indexOf("</head>"))
         assertEquals(r1.body.size, Regex("(?i)content-length:\\s*(\\d+)").find(r1.head)!!.groupValues[1].toInt())
         synchronized(requestsSeen) { assertTrue(requestsSeen.last().contains("Accept-Encoding: gzip, identity")) }
 
         // 2. gzip + CSP + Alt-Svc: decoded, injected, CSP extended, Alt-Svc gone
-        val r2 = viaProxy("localhost", originAddr, origin.localPort, "GET /gz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        val r2 = viaProxy("test.local", originAddr, origin.localPort, "GET /gz HTTP/1.1\r\nHost: test.local\r\nConnection: close\r\n\r\n")
         val body2 = String(r2.body)
         assertTrue(body2.contains("rules.adbrella.internal/g.css"))
         assertFalse(r2.head.contains("Content-Encoding"))
@@ -174,12 +174,12 @@ class InterceptEndToEndTest {
         assertTrue(r2.head.contains("Content-Security-Policy: default-src 'self'; style-src 'self' https://rules.adbrella.internal"))
 
         // 3. chunked HTML is de-chunked and injected
-        val r3 = viaProxy("localhost", originAddr, origin.localPort, "GET /chunked HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        val r3 = viaProxy("test.local", originAddr, origin.localPort, "GET /chunked HTTP/1.1\r\nHost: test.local\r\nConnection: close\r\n\r\n")
         assertTrue(String(r3.body).contains("rules.adbrella.internal/g.css"))
         assertFalse(r3.head.contains("Transfer-Encoding"))
 
         // 4. non-HTML passes through untouched
-        val r4 = viaProxy("localhost", originAddr, origin.localPort, "GET /image HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        val r4 = viaProxy("test.local", originAddr, origin.localPort, "GET /image HTTP/1.1\r\nHost: test.local\r\nConnection: close\r\n\r\n")
         assertEquals("PNG!", String(r4.body))
 
         // 5. the internal rules host serves the stylesheets with caching headers
@@ -187,7 +187,7 @@ class InterceptEndToEndTest {
         assertTrue(g.head.contains("text/css"))
         assertTrue(g.head.contains("max-age=86400"))
         assertEquals(".ad-banner{display:none!important}\n", String(g.body))
-        val s = viaProxy(InterceptProxy.INTERNAL_HOST, InterceptProxy.INTERNAL_IP, 443, "GET /s/localhost.css HTTP/1.1\r\nHost: ${InterceptProxy.INTERNAL_HOST}\r\nConnection: close\r\n\r\n")
+        val s = viaProxy(InterceptProxy.INTERNAL_HOST, InterceptProxy.INTERNAL_IP, 443, "GET /s/test.local.css HTTP/1.1\r\nHost: ${InterceptProxy.INTERNAL_HOST}\r\nConnection: close\r\n\r\n")
         assertEquals(".sponsored{display:none!important}\n", String(s.body))
 
         assertEquals(3L, proxy.pagesTidied) // three HTML pages injected; the image and the rules host are not
