@@ -43,7 +43,7 @@ fun CertificateRows() {
         Text(
             when {
                 installed -> "Installed. With Deep clean and \"Tidy pages in browsers\" on, pages in Chrome, Brave and Samsung Internet get their empty ad boxes removed; it takes effect on its own."
-                else -> "Not installed, so browsers are not being tidied at all. Adbrella keeps the private half on this phone and installs only the public certificate."
+                else -> "Not installed, so browsers are not being tidied at all. Android only accepts a CA certificate that you install yourself in Settings; Adbrella saves the file and takes you there. The private half never leaves this phone."
             },
             style = MaterialTheme.typography.bodySmall,
             color = if (installed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
@@ -74,15 +74,24 @@ fun CertificateRows() {
                         android.os.Handler(android.os.Looper.getMainLooper()).post {
                             busy = false
                             refresh++
-                            hint = when (installCertificateNow(context)) {
-                                "installer" -> "Android is asking to install it now. If it offers a choice of what to use it for, pick CA certificate, then confirm the warning."
-                                "keychain" -> "Name it Adbrella and confirm. If it asks what to use it for, pick CA certificate."
-                                "settings" -> "Settings is open: Other security settings › Install from device storage › CA certificate › pick ${CaInstall.FILE_NAME} (save it to Downloads first, below)."
-                                else -> "Could not open the certificate installer. Use \"Save to Downloads\" and install it from Settings."
+                            hint = when (startCertificateInstall(context)) {
+                                CertInstallRoute.INSTALLER ->
+                                    "Android is asking to install it. Pick CA certificate if it offers a choice, then confirm the warning."
+                                CertInstallRoute.SETTINGS ->
+                                    "Saved to Downloads as ${CaInstall.FILE_NAME}, and Settings is open. Android does not let an app install a CA certificate, so finish it here:\n\n" +
+                                        "1. Other security settings\n" +
+                                        "2. Install from device storage\n" +
+                                        "3. CA certificate — then Install anyway\n" +
+                                        "4. Pick ${CaInstall.FILE_NAME} (in Downloads)\n\n" +
+                                        "Come back and this row turns green by itself."
+                                CertInstallRoute.SAVED_ONLY ->
+                                    "Saved to Downloads as ${CaInstall.FILE_NAME}, but Settings would not open. Open Settings › Security and privacy › Other security settings › Install from device storage › CA certificate and pick that file."
+                                CertInstallRoute.FAILED ->
+                                    "Could not save the certificate. Check that storage is available and try again."
                             }
                         }
                     }.start()
-                }) { Text(if (busy) "Preparing…" else "Install certificate") }
+                }) { Text(if (busy) "Preparing…" else "Save certificate and open Settings") }
             }
             hint?.let {
                 Text(
