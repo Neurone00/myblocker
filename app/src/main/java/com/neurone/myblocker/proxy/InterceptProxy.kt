@@ -230,8 +230,15 @@ class InterceptProxy(
                     val body = readBody(up, resp, MAX_HTML)
                     if (body != null) {
                         var bytes = body
-                        if (encoding == "gzip") bytes = runCatching { GZIPInputStream(ByteArrayInputStream(bytes)).readBytes() }.getOrNull() ?: bytes.also { resp.set("Content-Encoding", "gzip") }
-                        if (resp.get("Content-Encoding")?.equals("gzip", true) != true) {
+                        var canInject = encoding == null || encoding == "identity"
+                        if (encoding == "gzip") {
+                            val decoded = runCatching { GZIPInputStream(ByteArrayInputStream(bytes)).readBytes() }.getOrNull()
+                            if (decoded != null) {
+                                bytes = decoded
+                                canInject = true // we hold the plain HTML now; drop the encoding header below
+                            }
+                        }
+                        if (canInject) {
                             val injected = inject(bytes, pageHost)
                             if (injected !== bytes) pagesTidied++
                             bytes = injected
