@@ -32,6 +32,12 @@ enum class BlockMode {
     NULL_IP,
     /** NXDOMAIN with a synthetic SOA so resolvers negative-cache it. */
     NXDOMAIN,
+    /**
+     * A -> 198.18.0.1, AAAA -> 2001:db8::1: public-looking addresses that Adbrella routes into its
+     * own tunnel and refuses at once. Fails as fast as NULL_IP, but an app that checks whether ad
+     * domains resolve to 0.0.0.0 / localhost (the usual "ad blocker detected" test) sees nothing odd.
+     */
+    INVISIBLE,
 }
 
 /**
@@ -105,14 +111,26 @@ object DnsMessage {
     }
 
     /** Builds the answer returned for a blocked name. */
+    /** Sinkhole addresses for [BlockMode.INVISIBLE]: benchmark range 198.18.0.0/15 and documentation prefix 2001:db8::/32. */
+    val SINK_V4: ByteArray = byteArrayOf(198.toByte(), 18, 0, 1)
+    val SINK_V6: ByteArray = byteArrayOf(0x20, 0x01, 0x0d, 0xb8.toByte(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+
+    /** True for any address inside the sinkhole ranges, so the tunnel can refuse connections to them at once. */
+    fun isSinkhole(a: ByteArray): Boolean = when (a.size) {
+        4 -> a[0] == 198.toByte() && (a[1] == 18.toByte() || a[1] == 19.toByte())
+        16 -> a[0] == 0x20.toByte() && a[1] == 0x01.toByte() && a[2] == 0x0d.toByte() && a[3] == 0xb8.toByte()
+        else -> false
+    }
+
     fun buildBlockedResponse(query: ByteArray, q: DnsQuestion, mode: BlockMode, ttl: Int = 60): ByteArray {
         val out = ByteArrayOutputStream(q.questionEnd + 64)
         val questionBytes = query.copyOfRange(HEADER_LENGTH, q.questionEnd)
         when (mode) {
-            BlockMode.NULL_IP -> {
+            BlockMode.NULL_IP, BlockMode.INVISIBLE -> {
+                val invisible = mode == BlockMode.INVISIBLE
                 val answer: ByteArray? = when (q.type) {
-                    TYPE_A -> ByteArray(4)
-                    TYPE_AAAA -> ByteArray(16)
+                    TYPE_A -> if (invisible) SINK_V4 else ByteArray(4)
+                    TYPE_AAAA -> if (invisible) SINK_V6 else ByteArray(16)
                     else -> null
                 }
                 writeHeader(out, q, RCODE_NOERROR, anCount = if (answer != null) 1 else 0, nsCount = if (answer == null) 1 else 0)

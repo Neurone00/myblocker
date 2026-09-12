@@ -357,14 +357,15 @@ class BlockerVpnService : VpnService() {
                     writeToTun = { pkt -> proxy?.writePacket(pkt) },
                     policy = object : FullTunnel.Policy {
                         override fun resetTcp(dst: ByteArray, dstPort: Int): Boolean =
-                            (dstPort == 53 || dstPort == 853 || dstPort == 443) && dst.toList() in resolverIps
+                            ((dstPort == 53 || dstPort == 853 || dstPort == 443) && dst.toList() in resolverIps) ||
+                                com.neurone.myblocker.dns.DnsMessage.isSinkhole(dst)
 
                         override fun dropUdp(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean {
                             // While intercepting, drop all QUIC (UDP/443). Per-connection UID lookup is
                             // unreliable for UDP, and if a browser stays on HTTP/3 it bypasses tidying
                             // entirely. Dropping QUIC makes every client fall back to interceptable TCP;
                             // non-browser apps simply use TCP and still pass through untouched.
-                            val drop = tidy && dstPort == 443
+                            val drop = (tidy && dstPort == 443) || com.neurone.myblocker.dns.DnsMessage.isSinkhole(dst)
                             if (drop) DeepCleanStats.quicDropped++
                             return drop
                         }
@@ -459,6 +460,9 @@ class BlockerVpnService : VpnService() {
         } else {
             builder.addRoute(DNS_ADDRESS_V4, 32)
             builder.addRoute(DNS_ADDRESS_V6, 128)
+            // Sinkhole ranges behind "Invisible" answers: captured so connections to them are refused at once.
+            runCatching { builder.addRoute("198.18.0.0", 15) }
+            runCatching { builder.addRoute("2001:db8::", 32) }
         }
         if (prefs.catchHardcodedResolvers && !prefs.deepClean) {
             for (ip in HARDCODED_RESOLVERS) runCatching { builder.addRoute(ip, 32) }

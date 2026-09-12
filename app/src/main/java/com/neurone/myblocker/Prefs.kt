@@ -75,7 +75,7 @@ class Prefs private constructor(context: Context) {
         set(v) = sp.edit().putString(KEY_CUSTOM_DNS, v.trim()).apply()
 
     var blockMode: BlockMode
-        get() = runCatching { BlockMode.valueOf(sp.getString(KEY_BLOCK_MODE, null) ?: "") }.getOrDefault(BlockMode.NULL_IP)
+        get() = runCatching { BlockMode.valueOf(sp.getString(KEY_BLOCK_MODE, null) ?: "") }.getOrDefault(BlockMode.INVISIBLE)
         set(v) = sp.edit().putString(KEY_BLOCK_MODE, v.name).apply()
 
     var startAtBoot: Boolean

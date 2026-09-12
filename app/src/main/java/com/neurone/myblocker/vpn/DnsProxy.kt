@@ -140,7 +140,8 @@ class DnsProxy(
                     // DNS-over-TCP, a Private-DNS probe (853) or DNS-over-HTTPS (443) to a captured
                     // public resolver. Refuse immediately so the client falls back to plain DNS.
                     val port = p.segment.dstPort
-                    if (port == 53 || port == 853 || port == 443) writeToTun(IpPackets.buildTcpRst(p.segment))
+                    // Sinkhole addresses (Invisible answers) are routed here too: refuse them at once.
+                    if (port == 53 || port == 853 || port == 443 || DnsMessage.isSinkhole(p.segment.dst)) writeToTun(IpPackets.buildTcpRst(p.segment))
                 }
             }
             ParsedPacket.Other -> Unit

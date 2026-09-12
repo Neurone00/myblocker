@@ -268,6 +268,12 @@ fun AboutScreen(nav: Navigator) {
             "For stubborn apps, add them under Settings › Apps that skip the umbrella.",
         )
         AboutSection(
+            "Apps that complain about ad blockers",
+            "Apps look for a blocker in three ways. The usual one resolves a known ad domain and checks for a 0.0.0.0 or localhost answer; Adbrella's Invisible answer (Advanced › Blocked answer, the default) returns a real-looking address that it refuses itself, so the app only sees an ad server that is down.",
+            "Some apps refuse to run while any VPN is active. Add them under Apps that skip the umbrella: they stop seeing one, but they also get no blocking.",
+            "A few only unlock once their ad SDK has actually received an ad. That cannot be faked without impersonating the ad server, and Adbrella does not do that.",
+        )
+        AboutSection(
             "Android Auto",
             "Android Auto refuses to start whenever any VPN is active (\"communication error 21\"), and it checks before it ever reports being connected, so waiting for it to connect is too late. Adbrella instead pauses the moment your phone joins the car — over Bluetooth, in car mode, or through the USB cable (wired Android Auto puts the phone in USB accessory mode, which a plain charger does not) — all of which happen before Android Auto starts, and resumes when you leave. Grant the Nearby devices permission so it can tell the car apart from headphones.",
             "If you use Always-on VPN, keep \"Block connections without VPN\" off, otherwise the phone has no network while paused and Android Auto still cannot connect.",

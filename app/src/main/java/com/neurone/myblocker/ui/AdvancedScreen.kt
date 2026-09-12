@@ -71,9 +71,17 @@ fun AdvancedScreen(nav: Navigator) {
             RowDivider()
             SettingRow(
                 "Blocked answer",
-                if (blockMode == BlockMode.NULL_IP) "Null IP (0.0.0.0 / ::), recommended" else "NXDOMAIN",
+                when (blockMode) {
+                    BlockMode.INVISIBLE -> "Invisible: a real-looking address that goes nowhere, so apps checking for a blocker see none. Recommended"
+                    BlockMode.NULL_IP -> "Null IP (0.0.0.0 / ::), the classic Pi-hole answer"
+                    BlockMode.NXDOMAIN -> "NXDOMAIN"
+                },
                 onClick = {
-                    prefs.blockMode = if (blockMode == BlockMode.NULL_IP) BlockMode.NXDOMAIN else BlockMode.NULL_IP
+                    prefs.blockMode = when (blockMode) {
+                        BlockMode.INVISIBLE -> BlockMode.NULL_IP
+                        BlockMode.NULL_IP -> BlockMode.NXDOMAIN
+                        BlockMode.NXDOMAIN -> BlockMode.INVISIBLE
+                    }
                     needsRestart = true
                 },
             )
