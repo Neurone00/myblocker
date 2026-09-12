@@ -370,6 +370,7 @@ class BlockerVpnService : VpnService() {
             }
             interceptProxy = intercept
             DeepCleanStats.intercepting = intercept != null
+            DeepCleanStats.deepClean = relay != null
             val p = DnsProxy(
                 pfd, upstream, prefs.blockMode, MTU, { onQuery(it) }, relay,
                 internalHost = if (intercept != null) InterceptProxy.INTERNAL_HOST else null,
@@ -557,6 +558,23 @@ class BlockerVpnService : VpnService() {
             if (!isRunning) return
             val i = Intent(context, BlockerVpnService::class.java).setAction(ACTION_RESTART)
             context.startForegroundService(i)
+        }
+
+        /**
+         * Deep clean and page tidying are decided when the tunnel comes up. Settings can change
+         * afterwards (a toggle, or the certificate installed from Settings while the tunnel runs),
+         * so callers on resume compare what the tunnel is doing with what is wanted and restart
+         * it when they differ. Safe to call from any thread; a no-op unless something changed.
+         */
+        fun reconcileDeepClean(context: Context) {
+            if (!isRunning || isStarting) return
+            val prefs = Prefs.get(context)
+            val wantDeep = prefs.deepClean
+            val wantIntercept = wantDeep && prefs.interceptBrowsers && CaInstall.isInstalled(context)
+            if (wantDeep != DeepCleanStats.deepClean || wantIntercept != DeepCleanStats.intercepting) {
+                Log.i(TAG, "deep clean settings changed (relay $wantDeep, tidy $wantIntercept): restarting tunnel")
+                restartIfRunning(context)
+            }
         }
     }
 }

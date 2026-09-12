@@ -9,6 +9,9 @@ object DeepCleanStats {
     /** True while an intercepting proxy is running (deep clean on, cert installed, browser tidying on). */
     @Volatile var intercepting: Boolean = false
 
+    /** True while the full-traffic relay (deep clean) is part of the running tunnel. */
+    @Volatile var deepClean: Boolean = false
+
     /** Browser TLS connections handed to the proxy since the tunnel started. */
     @Volatile var connections: Long = 0
 

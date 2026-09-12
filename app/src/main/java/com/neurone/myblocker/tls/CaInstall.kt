@@ -35,8 +35,19 @@ object CaInstall {
         return ca
     }
 
-    /** True when the CA certificate is installed in Android's user trust store. */
+    @Volatile private var installedCache: Pair<Long, Boolean>? = null
+
+    /** True when the CA certificate is installed in Android's user trust store (answer cached for a few seconds). */
     fun isInstalled(context: Context): Boolean {
+        val c = installedCache
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (c != null && now - c.first < 4000) return c.second
+        val v = readInstalled(context)
+        installedCache = now to v
+        return v
+    }
+
+    private fun readInstalled(context: Context): Boolean {
         if (!exists(context)) return false
         val ours = runCatching { get(context).caCert }.getOrNull() ?: return false
         return try {

@@ -261,7 +261,8 @@ fun HomeScreen(nav: Navigator) {
                         subtitle = if (item.done) null else item.detail,
                         onClick = if (item.done) null else ({
                             if (item.id == "alwayson") prefs.alwaysOnAcknowledged = true
-                            item.intent?.let { runCatching { context.startActivity(it) } }
+                            if (item.screen == "advanced") nav.push(Screen.Advanced)
+                            else item.intent?.let { runCatching { context.startActivity(it) } }
                         }),
                         trailing = {
                             if (item.done) Icon(Icons.Filled.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)

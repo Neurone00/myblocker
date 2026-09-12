@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -16,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.neurone.myblocker.tls.CaInstall
+import com.neurone.myblocker.vpn.BlockerVpnService
 
 /**
  * Status and actions for the local certificate that lets deep clean open browser HTTPS.
@@ -31,12 +33,14 @@ fun CertificateRows() {
     val exists = remember(tick, refresh) { CaInstall.exists(context) }
     val installed = remember(tick, refresh) { exists && CaInstall.isInstalled(context) }
     val fingerprint = remember(exists, refresh) { if (exists) CaInstall.fingerprint(context) else "" }
+    // The moment the install lands, the running tunnel is rebuilt so tidying starts by itself.
+    LaunchedEffect(installed) { if (installed) Thread { BlockerVpnService.reconcileDeepClean(context) }.start() }
 
     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
         Text("Certificate for page tidying", style = MaterialTheme.typography.bodyLarge)
         Text(
             when {
-                installed -> "Installed. With Deep clean on, pages in Chrome, Brave and Samsung Internet get their empty ad boxes removed. Restart the umbrella after installing."
+                installed -> "Installed. With Deep clean and \"Tidy pages in browsers\" on, pages in Chrome, Brave and Samsung Internet get their empty ad boxes removed; it takes effect on its own."
                 exists -> "Created, not yet installed. Save it to Downloads, then install it from Settings."
                 else -> "Not created yet. Adbrella makes a private certificate that stays on this phone; you install only its public half."
             },
