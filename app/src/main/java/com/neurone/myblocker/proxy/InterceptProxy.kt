@@ -20,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.zip.GZIPInputStream
-import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SNIHostName
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
@@ -144,12 +143,11 @@ class InterceptProxy(
         val params = ssl.sslParameters
         params.applicationProtocols = arrayOf("http/1.1")
         if (!isIp) params.serverNames = listOf(SNIHostName(host))
+        // The handshake itself verifies the certificate against the host, exactly as a browser does.
+        // A mismatched or untrusted chain throws here, so a bad upstream is never silently accepted.
+        params.endpointIdentificationAlgorithm = "HTTPS"
         ssl.sslParameters = params
         ssl.startHandshake()
-        if (!HttpsURLConnection.getDefaultHostnameVerifier().verify(host, ssl.session)) {
-            ssl.close()
-            throw IOException("hostname verification failed for $host")
-        }
         return ssl
     }
 
