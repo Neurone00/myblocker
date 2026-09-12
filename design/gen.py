@@ -139,8 +139,8 @@ def stat(value, label):
 
 def home(theme, running=True, checklist=True, name="Main"):
     hero_bg = theme['hero'] if running else theme['closed']
-    title = "Sealed tight." if running else "Umbrella down."
-    sub = "Ads keep knocking. Sal and Yeti keep ghosting them." if running else "Sal is nervous. Yeti is exposed. Ads are sniffing around."
+    title = "You're covered" if running else "Umbrella down"
+    sub = "Ads keep knocking. Nobody's home." if running else "Ads are walking right in."
     detail = "Covering every app on this phone" if running else "Nothing is being blocked right now"
     btn = "Let the ads in (why though)" if running else "Seal my phone"
     btn_style = "background: #FFFFFF; color: var(--on-primary-container);" if running else "background: var(--primary); color: var(--on-primary);"
@@ -148,7 +148,7 @@ def home(theme, running=True, checklist=True, name="Main"):
     if checklist:
         check = f'''
   <div class="card" style="gap: 0; padding: 0; overflow: hidden;">
-    <div class="row" style="padding: 14px 16px 6px 16px;"><div style="color: var(--primary);">{ICON['warn']}</div><div class="title-m" style="flex-grow: 1;">Two settings so Sal can nap</div></div>
+    <div class="row" style="padding: 14px 16px 6px 16px;"><div style="color: var(--primary);">{ICON['warn']}</div><div class="title-m" style="flex-grow: 1;">Two phone settings to go</div></div>
     <div class="body-s" style="padding: 0 16px 10px 16px;">Your phone likes to close umbrellas in the background. This card leaves once both are done.</div>
     <div class="divider"></div>
     <div class="row" style="padding: 12px 16px; min-height: 48px;"><div style="width: 22px; height: 22px; border-radius: 11px; border: 2px solid var(--outline); box-sizing: border-box;"></div><div class="body-m" style="flex-grow: 1;">Let Adbrella run in the background</div><div style="color: var(--on-surface-variant);">{ICON['chev']}</div></div>
@@ -160,28 +160,29 @@ def home(theme, running=True, checklist=True, name="Main"):
     body = f'''
 <div class="phone">
  <div class="content" style="gap: 12px;">
-  <div style="border-radius: 28px; background: {hero_bg}; padding: 18px 20px 20px 20px; display: flex; flex-direction: column; align-items: center; gap: 2px; color: #FFFFFF; overflow: hidden;">
-    <div style="{'' if running else 'filter: grayscale(0.6); opacity: 0.85;'}">{MASCOTS}</div>
-    <div style="font-size: 26px; line-height: 32px; font-weight: 700;">{title}</div>
-    <div style="font-size: 15px; line-height: 22px; opacity: 0.94; text-align: center;">{sub}</div>
-    <div style="height: 12px;"></div>
-    <div style="align-self: stretch; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 500; {btn_style}">{btn}</div>
+  <div class="card" style="flex-direction: row; align-items: center; gap: 16px; padding: 20px; border-radius: 24px; background: {'var(--primary-container)' if running else 'var(--surface)'};">
+    <div style="color: {'var(--on-primary-container)' if running else 'var(--on-surface-variant)'}; width: 32px; height: 32px;">{ICON['umbrella'].replace('width="24" height="24"','width="32" height="32"')}</div>
+    <div style="flex-grow: 1; min-width: 0;">
+      <div style="font-size: 22px; line-height: 28px; font-weight: 700;">{title}</div>
+      <div class="body-m" style="color: var(--on-surface-variant);">{sub}</div>
+    </div>
+    <div class="switch{'' if running else ' off'}" style="transform: scale(1.15);"></div>
   </div>
   <div style="display: flex; flex-direction: row; gap: 10px;">{stat("1,284","bounced today")}{stat("38,902","bounced ever")}{stat("12","day streak")}</div>
   {check}
   <div class="card" style="gap: 10px;">
-    <div class="row"><div class="title-m" style="flex-grow: 1;">Level 5 · Cold Shoulder</div><div class="body-s">10,000 bounces to Abominable</div></div>
+    <div class="row"><div class="title-m" style="flex-grow: 1;">Level 5 · Storm</div><div class="body-s">10,000 to go</div></div>
     <div style="height: 8px; border-radius: 4px; background: var(--surface-variant); overflow: hidden;"><div style="width: 62%; height: 8px; background: var(--primary); border-radius: 4px;"></div></div>
   </div>
   <div class="card" style="gap: 8px; padding: 12px 16px;">
     <div class="row"><div class="title-m" style="flex-grow: 1;">Bounced lately</div><div class="btn text" style="height: 32px;">See all</div></div>
-    <div class="row" style="min-height: 44px;"><div style="color: var(--error);">{ICON['block']}</div><div style="flex-grow: 1; min-width: 0;"><div class="body-m">Solitaire tried to show an ad</div><div class="body-s" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Sal slapped it away · just now</div></div><div class="btn text" style="height: 32px;">Allow</div></div>
-    <div class="row" style="min-height: 44px;"><div style="color: var(--error);">{ICON['block']}</div><div style="flex-grow: 1; min-width: 0;"><div class="body-m">Solitaire tried again</div><div class="body-s" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Yeti never saw it · 4 s ago</div></div><div class="btn text" style="height: 32px;">Allow</div></div>
+    <div class="row" style="min-height: 44px;"><div style="color: var(--error);">{ICON['block']}</div><div style="flex-grow: 1; min-width: 0;"><div class="body-m">Solitaire tried to show an ad</div><div class="body-s" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">googleads.g.doubleclick.net</div></div><div class="btn text" style="height: 32px;">Allow</div></div>
+    <div class="row" style="min-height: 44px;"><div style="color: var(--error);">{ICON['block']}</div><div style="flex-grow: 1; min-width: 0;"><div class="body-m">Solitaire tried to show an ad</div><div class="body-s" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">config.unityads.unity3d.com</div></div><div class="btn text" style="height: 32px;">Allow</div></div>
   </div>
  </div>
  {nav('umbrella')}
 </div>'''
-    return page(body, theme, MASCOT_CSS)
+    return page(body, theme)
 
 def activity(theme):
     rows = [("googleads.g.doubleclick.net","Solitaire","12:41:07",True),("i.instagram.com","Instagram","12:41:05",False),("graph.instagram.com","Instagram","12:41:05",False),("config.unityads.unity3d.com","Solitaire","12:41:02",True),("an.facebook.com","Weather","12:40:58",True),("api.openweathermap.org","Weather","12:40:58",False),("app-measurement.com","Solitaire","12:40:51",True),("samsungcloud.com","Samsung Cloud","12:40:40",False),("ads.samsungads.com","Galaxy Store","12:40:31",True),("play.googleapis.com","Google Play Store","12:40:12",False)]
@@ -233,10 +234,10 @@ def stats(theme):
   <div class="card" style="gap: 0; padding: 12px 16px;">
     <div class="row" style="padding-bottom: 6px;"><div class="title-m" style="flex-grow: 1;">Badges</div><div class="body-s">6 of 13</div></div>
     <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;">
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><div style="width: 48px; height: 48px; border-radius: 24px; background: var(--primary-container); color: var(--on-primary-container); display: flex; align-items: center; justify-content: center;">{ICON['umbrella']}</div><div class="body-s" style="text-align: center;">Seal of approval</div></div>
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><div style="width: 48px; height: 48px; border-radius: 24px; background: var(--primary-container); color: var(--on-primary-container); display: flex; align-items: center; justify-content: center;">{ICON['chart']}</div><div class="body-s" style="text-align: center;">Abominable</div></div>
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><div style="width: 48px; height: 48px; border-radius: 24px; background: var(--primary-container); color: var(--on-primary-container); display: flex; align-items: center; justify-content: center;">{ICON['activity']}</div><div class="body-s" style="text-align: center;">Hibernation</div></div>
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0.4;"><div style="width: 48px; height: 48px; border-radius: 24px; border: 2px dashed var(--outline); box-sizing: border-box;"></div><div class="body-s" style="text-align: center;">Big chill</div></div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><div style="width: 48px; height: 48px; border-radius: 24px; background: var(--primary-container); color: var(--on-primary-container); display: flex; align-items: center; justify-content: center;">{ICON['umbrella']}</div><div class="body-s" style="text-align: center;">First bounce</div></div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><div style="width: 48px; height: 48px; border-radius: 24px; background: var(--primary-container); color: var(--on-primary-container); display: flex; align-items: center; justify-content: center;">{ICON['chart']}</div><div class="body-s" style="text-align: center;">Downpour</div></div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><div style="width: 48px; height: 48px; border-radius: 24px; background: var(--primary-container); color: var(--on-primary-container); display: flex; align-items: center; justify-content: center;">{ICON['activity']}</div><div class="body-s" style="text-align: center;">Dry week</div></div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0.4;"><div style="width: 48px; height: 48px; border-radius: 24px; border: 2px dashed var(--outline); box-sizing: border-box;"></div><div class="body-s" style="text-align: center;">Dry month</div></div>
     </div>
   </div>
  </div>
@@ -346,7 +347,20 @@ def lists(theme):
 </div>'''
     return page(body, theme)
 
+
+def splash(theme):
+    body = f'''
+<div class="phone" style="background: linear-gradient(135deg, #4FC3F7 0%, #1E88E5 55%, #26C6DA 100%); align-items: center; justify-content: center; color: #FFFFFF;">
+  <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+    <svg width="220" height="200" viewBox="0 0 220 200" fill="none"><path d="M18 112 A92 62 0 0 1 202 112 A15.3 11 0 0 1 171.3 112 A15.3 11 0 0 1 140.7 112 A15.3 11 0 0 1 110 112 A15.3 11 0 0 1 79.3 112 A15.3 11 0 0 1 48.7 112 A15.3 11 0 0 1 18 112 Z" fill="#FFFFFF"></path><path d="M110 40 L64 112 M110 40 L156 112" stroke="#000000" stroke-opacity="0.08" stroke-width="2"></path><circle cx="110" cy="36" r="4.5" fill="#FFFFFF"></circle><path d="M110 108 V164 A10 10 0 0 1 90 164" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"></path><circle cx="60" cy="14" r="6" fill="#FFFFFF" fill-opacity="0.9"></circle><circle cx="118" cy="30" r="6" fill="#FFFFFF" fill-opacity="0.8"></circle><circle cx="182" cy="66" r="6" fill="#FFFFFF" fill-opacity="0.5"></circle></svg>
+    <div style="font-size: 30px; line-height: 36px; font-weight: 700;">Adbrella</div>
+    <div style="font-size: 16px; line-height: 24px; opacity: 0.85;">Keeps the ads off you.</div>
+  </div>
+</div>'''
+    return page(body, theme)
+
 files = {
+ "Splash.dc.html": splash(BRAND),
  "Main.dc.html": home(BRAND, True, True),
  "HomeClosed.dc.html": home(BRAND, False, False),
  "HomeDynamicColor.dc.html": home(DYNAMIC, True, False),
@@ -358,6 +372,7 @@ files = {
 }
 for k,v in files.items(): open(k,'w').write(v)
 canvas = {"artboards": [
+  {"file":"Splash.dc.html","x":-480,"y":0,"w":390,"h":844,"title":"Launch splash (1.6 s)"},
   {"file":"Main.dc.html","x":0,"y":0,"w":390,"h":844,"title":"Home · open"},
   {"file":"HomeClosed.dc.html","x":480,"y":0,"w":390,"h":844,"title":"Home · closed"},
   {"file":"HomeDynamicColor.dc.html","x":960,"y":0,"w":390,"h":844,"title":"Home · wallpaper colors (Material You)"},
@@ -368,7 +383,7 @@ canvas = {"artboards": [
   {"file":"Advanced.dc.html","x":1920,"y":980,"w":390,"h":844,"title":"Settings › Advanced"},
  ],
  "annotations": [
-  {"id":"brief","x":0,"y":-170,"w":440,"text":"Adbrella on the S23 — funny dashboard, quiet everywhere else.\nMascots: Sal the seal (your phone is sealed) and Yeti (ads can\u2019t find you). Duolingo-style idle animation: bob, blink, wave, AD-drops bouncing off the umbrella; in the app the pair also cheers on every 100th bounce and on a new badge.\nKept from Adbrella: umbrella hero, sky-to-teal gradient, copy voice (\"kept off you\", \"drops\"), 18/28 dp radii, bottom tabs.\nChanged: consumer wording everywhere (no domain counts, DNS or list names on the main surfaces), 4 tabs instead of 5, a setup card that vanishes once the phone is configured, Material You colors on device (third artboard shows a warm wallpaper). Every technical control lives under Settings › Advanced."},
+  {"id":"brief","x":0,"y":-170,"w":440,"text":"Adbrella on the S23 — quiet and native.\nBranding lives in a 1.6 s launch splash (umbrella pops open, three ad-drops bounce off, wordmark fades in) and then stays out of the way: a status card with one switch, three numbers, a setup card that disappears once One UI is configured, a level line, and the last bounces. Wallpaper colors on device (third artboard). Every technical control sits under Settings › Advanced."},
   {"id":"dyn","x":960,"y":-90,"w":390,"text":"On the phone the palette follows the wallpaper (dynamicColorScheme). The brand blue is the fallback and the umbrella stays white, so the identity survives any wallpaper."}
  ],
  "launch": {"view":"canvas"}}

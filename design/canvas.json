@@ -1,6 +1,14 @@
 {
  "artboards": [
   {
+   "file": "Splash.dc.html",
+   "x": -480,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Launch splash (1.6 s)"
+  },
+  {
    "file": "Main.dc.html",
    "x": 0,
    "y": 0,
@@ -71,7 +79,7 @@
    "x": 0,
    "y": -170,
    "w": 440,
-   "text": "Adbrella on the S23 \u2014 funny dashboard, quiet everywhere else.\nMascots: Sal the seal (your phone is sealed) and Yeti (ads can\u2019t find you). Duolingo-style idle animation: bob, blink, wave, AD-drops bouncing off the umbrella; in the app the pair also cheers on every 100th bounce and on a new badge.\nKept from Adbrella: umbrella hero, sky-to-teal gradient, copy voice (\"kept off you\", \"drops\"), 18/28 dp radii, bottom tabs.\nChanged: consumer wording everywhere (no domain counts, DNS or list names on the main surfaces), 4 tabs instead of 5, a setup card that vanishes once the phone is configured, Material You colors on device (third artboard shows a warm wallpaper). Every technical control lives under Settings \u203a Advanced."
+   "text": "Adbrella on the S23 \u2014 quiet and native.\nBranding lives in a 1.6 s launch splash (umbrella pops open, three ad-drops bounce off, wordmark fades in) and then stays out of the way: a status card with one switch, three numbers, a setup card that disappears once One UI is configured, a level line, and the last bounces. Wallpaper colors on device (third artboard). Every technical control sits under Settings \u203a Advanced."
   },
   {
    "id": "dyn",
