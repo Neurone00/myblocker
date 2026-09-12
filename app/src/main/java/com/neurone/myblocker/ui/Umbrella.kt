@@ -24,7 +24,7 @@ fun UmbrellaGlyph(open: Float, tint: Color, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val w = size.width
         val h = size.height
-        val o = open.coerceIn(0f, 1.08f)
+        val o = open.coerceIn(0f, 1.14f) // a little past full so the spring can flare the ribs
         val cx = w / 2f
         val apex = Offset(cx, h * 0.16f)
         val rib = h * 0.50f // rib length from the apex; also the dome radius when open

@@ -9,6 +9,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +65,9 @@ import com.neurone.myblocker.system.SetupChecks
 import com.neurone.myblocker.update.Updater
 import com.neurone.myblocker.vpn.BlockerVpnService
 import kotlinx.coroutines.launch
+
+/** How far open the umbrella rests while protection is off: half-closed, not furled. */
+private const val UMBRELLA_REST = 0.45f
 
 @Composable
 fun HomeScreen(nav: Navigator) {
@@ -138,19 +147,52 @@ fun HomeScreen(nav: Navigator) {
             if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
             label = "status",
         )
-        // The umbrella pops open (with a little overshoot) when protection comes up, half-open while starting.
-        val umbrellaOpen by animateFloatAsState(
-            targetValue = when { running -> 1f; starting -> 0.35f; else -> 0f },
-            animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow),
-            label = "umbrella",
-        )
+        // The umbrella rests half-closed. Turning protection on: a quick tuck (anticipation), then it
+        // springs open past full and settles, with a small swing of the canopy. While starting it
+        // breathes between half and mostly open; turning off lowers it gently, no bounce.
+        val umbrellaOpen = remember { Animatable(if (running) 1f else UMBRELLA_REST) }
+        val umbrellaTilt = remember { Animatable(0f) }
+        LaunchedEffect(running, starting) {
+            when {
+                running -> {
+                    if (umbrellaOpen.value < 0.95f) {
+                        umbrellaOpen.animateTo((umbrellaOpen.value - 0.12f).coerceAtLeast(0.25f), tween(110, easing = FastOutSlowInEasing))
+                        launch {
+                            umbrellaTilt.animateTo(
+                                0f,
+                                keyframes { durationMillis = 700; -9f at 120; 7f at 330; -3f at 500; 0f at 700 },
+                            )
+                        }
+                        umbrellaOpen.animateTo(1f, spring(dampingRatio = 0.32f, stiffness = 420f))
+                    } else {
+                        umbrellaOpen.animateTo(1f, tween(250))
+                    }
+                }
+                starting -> {
+                    umbrellaTilt.snapTo(0f)
+                    while (true) {
+                        umbrellaOpen.animateTo(0.72f, tween(650, easing = FastOutSlowInEasing))
+                        umbrellaOpen.animateTo(UMBRELLA_REST, tween(650, easing = FastOutSlowInEasing))
+                    }
+                }
+                else -> {
+                    umbrellaTilt.snapTo(0f)
+                    umbrellaOpen.animateTo(UMBRELLA_REST, tween(480, easing = FastOutSlowInEasing))
+                }
+            }
+        }
         Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = MaterialTheme.shapes.large) {
             // Fixed text lines so the card keeps its height whatever the state says.
             Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                 UmbrellaGlyph(
-                    open = umbrellaOpen,
+                    open = umbrellaOpen.value,
                     tint = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier
+                        .size(40.dp)
+                        .graphicsLayer {
+                            rotationZ = umbrellaTilt.value
+                            transformOrigin = TransformOrigin(0.5f, 0.8f) // swing from the handle
+                        },
                 )
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
