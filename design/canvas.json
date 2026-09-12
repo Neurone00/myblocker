@@ -1,0 +1,87 @@
+{
+ "artboards": [
+  {
+   "file": "Main.dc.html",
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Home \u00b7 open"
+  },
+  {
+   "file": "HomeClosed.dc.html",
+   "x": 480,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Home \u00b7 closed"
+  },
+  {
+   "file": "HomeDynamicColor.dc.html",
+   "x": 960,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Home \u00b7 wallpaper colors (Material You)"
+  },
+  {
+   "file": "Activity.dc.html",
+   "x": 0,
+   "y": 980,
+   "w": 390,
+   "h": 844,
+   "title": "Activity"
+  },
+  {
+   "file": "Stats.dc.html",
+   "x": 480,
+   "y": 980,
+   "w": 390,
+   "h": 844,
+   "title": "Stats"
+  },
+  {
+   "file": "Settings.dc.html",
+   "x": 960,
+   "y": 980,
+   "w": 390,
+   "h": 844,
+   "title": "Settings"
+  },
+  {
+   "file": "ProtectionLevel.dc.html",
+   "x": 1440,
+   "y": 980,
+   "w": 390,
+   "h": 844,
+   "title": "Protection strength"
+  },
+  {
+   "file": "Advanced.dc.html",
+   "x": 1920,
+   "y": 980,
+   "w": 390,
+   "h": 844,
+   "title": "Settings \u203a Advanced"
+  }
+ ],
+ "annotations": [
+  {
+   "id": "brief",
+   "x": 0,
+   "y": -170,
+   "w": 440,
+   "text": "Adbrella on the S23 \u2014 funny dashboard, quiet everywhere else.\nMascots: Sal the seal (your phone is sealed) and Yeti (ads can\u2019t find you). Duolingo-style idle animation: bob, blink, wave, AD-drops bouncing off the umbrella; in the app the pair also cheers on every 100th bounce and on a new badge.\nKept from Adbrella: umbrella hero, sky-to-teal gradient, copy voice (\"kept off you\", \"drops\"), 18/28 dp radii, bottom tabs.\nChanged: consumer wording everywhere (no domain counts, DNS or list names on the main surfaces), 4 tabs instead of 5, a setup card that vanishes once the phone is configured, Material You colors on device (third artboard shows a warm wallpaper). Every technical control lives under Settings \u203a Advanced."
+  },
+  {
+   "id": "dyn",
+   "x": 960,
+   "y": -90,
+   "w": 390,
+   "text": "On the phone the palette follows the wallpaper (dynamicColorScheme). The brand blue is the fallback and the umbrella stays white, so the identity survives any wallpaper."
+  }
+ ],
+ "launch": {
+  "view": "canvas"
+ }
+}

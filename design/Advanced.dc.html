@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+  <style>
+    :root { --bg:#F3F8FD; --surface:#FFFFFF; --surface-container:#E9F1F8; --surface-variant:#E6EFF7; --on-surface:#0F1A26; --on-surface-variant:#44546A; --outline:#74849A; --primary:#1E88E5; --on-primary:#FFFFFF; --primary-container:#D6ECFF; --on-primary-container:#0B3A63; --secondary-container:#D0F5F9; --on-secondary-container:#00363C; --error:#D84315; }
+
+    body { margin: 0; font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #1E88E5; } a:hover { color: #0B3A63; }
+    .phone { width: 390px; height: 844px; background: var(--bg); color: var(--on-surface); display: flex; flex-direction: column; overflow: hidden; position: relative; }
+    .content { flex-grow: 1; overflow: hidden; display: flex; flex-direction: column; gap: 14px; padding: 56px 16px 16px 16px; }
+    .content > * { flex-shrink: 0; }
+    .card { background: var(--surface); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+    .title-m { font-size: 16px; font-weight: 500; line-height: 24px; letter-spacing: 0.15px; }
+    .body-m { font-size: 14px; line-height: 20px; letter-spacing: 0.25px; }
+    .body-s { font-size: 12px; line-height: 16px; letter-spacing: 0.4px; color: var(--on-surface-variant); }
+    .label-m { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; color: var(--on-surface-variant); }
+    .nav { height: 80px; background: var(--surface-container); display: flex; flex-direction: row; align-items: center; justify-content: space-around; padding: 0 8px; }
+    .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 80px; }
+    .nav-pill { width: 64px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; }
+    .nav-pill.on { background: var(--secondary-container); }
+    .nav-label { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; color: var(--on-surface-variant); }
+    .nav-label.on { color: var(--on-surface); font-weight: 700; }
+    .row { display: flex; flex-direction: row; align-items: center; gap: 12px; }
+    .switch { width: 52px; height: 32px; border-radius: 16px; background: var(--primary); position: relative; flex-shrink: 0; }
+    .switch::after { content: ''; position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 12px; background: #fff; }
+    .switch.off { background: var(--surface-variant); border: 2px solid var(--outline); box-sizing: border-box; }
+    .switch.off::after { top: 6px; left: 6px; right: auto; width: 16px; height: 16px; background: var(--outline); }
+    .divider { height: 1px; background: var(--surface-variant); }
+    .btn { height: 40px; border-radius: 20px; padding: 0 24px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; letter-spacing: 0.1px; }
+    .btn.filled { background: var(--primary); color: var(--on-primary); }
+    .btn.tonal { background: var(--secondary-container); color: var(--on-secondary-container); }
+    .btn.text { color: var(--primary); padding: 0 12px; }
+    .chip { height: 32px; border-radius: 8px; padding: 0 12px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; border: 1px solid var(--outline); color: var(--on-surface-variant); }
+    .chip.on { background: var(--secondary-container); border-color: transparent; color: var(--on-secondary-container); }
+
+  </style>
+</helmet>
+
+<div class="phone">
+ <div class="content" style="gap: 12px;">
+  <div class="row" style="gap: 8px;"><div style="color: var(--on-surface);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg></div><div style="font-size: 22px; line-height: 28px; font-weight: 500;">Advanced</div></div>
+  <div class="body-s" style="padding: 0 4px;">Everything here works out of the box. Change it only if you know what you are looking for.</div>
+  <div class="card" style="gap: 0; padding: 4px 0;">
+    <div class="label-m" style="padding: 8px 16px 0 16px; color: var(--primary);">Filtering</div>
+    <div class="row" style="min-height: 56px; padding: 8px 16px;"><div style="flex-grow: 1;"><div class="body-m" style="font-size: 16px; line-height: 24px;">Blocklists</div><div class="body-s">6 lists on · 288,412 domains · updated 2 h ago</div></div><div style="color: var(--on-surface-variant);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></div></div>
+    <div class="divider" style="margin: 0 16px;"></div>
+    <div class="row" style="min-height: 56px; padding: 8px 16px;"><div style="flex-grow: 1;"><div class="body-m" style="font-size: 16px; line-height: 24px;">Your allow and block rules</div><div class="body-s">3 allowed · 1 blocked</div></div><div style="color: var(--on-surface-variant);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></div></div>
+    <div class="divider" style="margin: 0 16px;"></div>
+    <div class="row" style="min-height: 56px; padding: 8px 16px;"><div style="flex-grow: 1;"><div class="body-m" style="font-size: 16px; line-height: 24px;">Blocked answer</div><div class="body-s">Null IP (recommended)</div></div><div style="color: var(--on-surface-variant);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></div></div>
+    <div class="divider" style="margin: 0 16px;"></div>
+    <div class="row" style="min-height: 56px; padding: 8px 16px;"><div style="flex-grow: 1;"><div class="body-m" style="font-size: 16px; line-height: 24px;">Safety allowlist</div><div class="body-s">Never blocks Play, push notifications, Samsung account</div></div><div class="switch"></div></div>
+  </div>
+  <div class="card" style="gap: 0; padding: 4px 0;">
+    <div class="label-m" style="padding: 8px 16px 0 16px; color: var(--primary);">DNS</div>
+    <div class="row" style="min-height: 56px; padding: 8px 16px;"><div style="flex-grow: 1;"><div class="body-m" style="font-size: 16px; line-height: 24px;">Upstream resolver</div><div class="body-s">Quad9 · DNS-over-HTTPS</div></div><div style="color: var(--on-surface-variant);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></div></div>
+    <div class="divider" style="margin: 0 16px;"></div>
+    <div class="row" style="min-height: 56px; padding: 8px 16px;"><div style="flex-grow: 1;"><div class="body-m" style="font-size: 16px; line-height: 24px;">Catch hard-coded resolvers</div><div class="body-s">Filters apps that talk to 8.8.8.8 or 1.1.1.1 directly</div></div><div class="switch"></div></div>
+  </div>
+  <div class="card" style="gap: 0; padding: 4px 0;">
+    <div class="label-m" style="padding: 8px 16px 0 16px; color: var(--primary);">Diagnostics</div>
+    <div class="row" style="min-height: 56px; padding: 8px 16px;"><div style="flex-grow: 1;"><div class="body-m" style="font-size: 16px; line-height: 24px;">Query log</div><div class="body-s">Keep the last 1,500 lookups with the app that made them</div></div><div class="switch"></div></div>
+    <div class="divider" style="margin: 0 16px;"></div>
+    <div class="row" style="min-height: 56px; padding: 8px 16px;"><div style="flex-grow: 1;"><div class="body-m" style="font-size: 16px; line-height: 24px;">Reset statistics</div></div><div style="color: var(--on-surface-variant);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></div></div>
+    <div class="divider" style="margin: 0 16px;"></div>
+    <div class="row" style="min-height: 56px; padding: 8px 16px;"><div style="flex-grow: 1;"><div class="body-m" style="font-size: 16px; line-height: 24px;">Version</div><div class="body-s">1.0.0-b12 · 79db37f</div></div><div style="color: var(--on-surface-variant);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></div></div>
+  </div>
+ </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -15,21 +15,26 @@ import com.neurone.myblocker.vpn.BlockerVpnService
 object Notifications {
     const val CHANNEL_RUNNING = "running"
     const val CHANNEL_ACHIEVEMENTS = "achievements"
+    const val CHANNEL_UPDATES = "updates"
     const val ID_RUNNING = 1
+    const val ID_UPDATE = 2
     private const val ID_ACHIEVEMENT_BASE = 1000
 
     fun ensureChannels(context: Context) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_RUNNING, "Protection status", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Shown while MyBlocker is filtering DNS"
+            NotificationChannel(CHANNEL_RUNNING, context.getString(R.string.notification_channel), NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Shown while the umbrella is open"
                 setShowBadge(false)
             },
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ACHIEVEMENTS, "Achievements", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            NotificationChannel(CHANNEL_ACHIEVEMENTS, context.getString(R.string.notification_channel_badges), NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "Milestones and badges"
             },
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_UPDATES, context.getString(R.string.notification_channel_updates), NotificationManager.IMPORTANCE_DEFAULT),
         )
     }
 
@@ -43,15 +48,15 @@ object Notifications {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val today = StatsStore.todayBlocked()
-        val text = if (starting && !BlockerVpnService.isRunning) "Starting…" else "Blocked today: $today · total ${StatsStore.totalBlocked}"
+        val text = if (starting && !BlockerVpnService.isRunning) "Opening…" else "$today bounced today · ${StatsStore.totalBlocked} all time"
         return Notification.Builder(context, CHANNEL_RUNNING)
-            .setSmallIcon(R.drawable.ic_shield)
-            .setContentTitle(if (BlockerVpnService.isRunning || starting) "MyBlocker is protecting you" else "MyBlocker")
+            .setSmallIcon(R.drawable.ic_umbrella)
+            .setContentTitle(if (BlockerVpnService.isRunning || starting) "Umbrella open" else "Adbrella")
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
-            .addAction(Notification.Action.Builder(null, "Stop", stop).build())
+            .addAction(Notification.Action.Builder(null, context.getString(R.string.notification_stop), stop).build())
             .setCategory(Notification.CATEGORY_SERVICE)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .build()
@@ -69,8 +74,8 @@ object Notifications {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val n = Notification.Builder(context, CHANNEL_ACHIEVEMENTS)
-            .setSmallIcon(R.drawable.ic_shield)
-            .setContentTitle("${a.emoji} Achievement unlocked: ${a.title}")
+            .setSmallIcon(R.drawable.ic_umbrella)
+            .setContentTitle("Badge earned: ${a.title}")
             .setContentText(a.description)
             .setAutoCancel(true)
             .setContentIntent(open)

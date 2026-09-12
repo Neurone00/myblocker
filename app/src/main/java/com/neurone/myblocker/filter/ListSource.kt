@@ -7,7 +7,7 @@ enum class ProtectionLevel(val label: String) {
     OFF("Off"),
     LIGHT("Light"),
     BALANCED("Balanced"),
-    AGGRESSIVE("Aggressive"),
+    AGGRESSIVE("Strong"),
     CUSTOM("Custom");
 
     companion object {

@@ -1,23 +1,24 @@
-# MyBlocker
+# ☂ Adbrella
 
-System-wide ad and tracker blocker for Android, built for a Samsung Galaxy S23 (One UI, Android 14+). No root, no remote servers, no third-party libraries.
+Keeps the ads off you. A system-wide ad and tracker blocker for Android, built for a Samsung Galaxy S23 (One UI, Android 14+). No root, no remote servers, no accounts.
 
-MyBlocker runs a **local VPN that captures only DNS**. Every app's lookups pass through it; names on the blocklists get an instant empty answer, so the ad or tracker never loads. Everything else is forwarded, encrypted (DNS-over-HTTPS to Quad9 by default), to the resolver you choose. Real traffic never enters the tunnel, so there is no speed or battery cost beyond the DNS work itself.
+Adbrella runs a **local VPN that captures only DNS**. Every app's lookups pass through it; names on the blocklists get an instant empty answer, so the ad or tracker never loads. Everything else is forwarded, encrypted (DNS-over-HTTPS to Quad9 by default), to the resolver you choose. Real traffic never enters the tunnel, so there is no speed or battery cost beyond the DNS work itself.
 
 ## Get the APK
 
-Every push builds a signed APK on GitHub Actions and publishes it as a **GitHub Release**:
+Every push builds a signed APK on GitHub Actions and publishes it twice:
 
-1. Open the repository's **Releases** page. The newest build is at the top, named like `MyBlocker v1.0.0-b42`.
-2. Download `MyBlocker-v1.0.0-b42-<sha>-release.apk` on the phone and open it. Allow installs from your browser if asked.
-3. Later builds install over earlier ones (same signing key), keeping your settings and stats.
+- a versioned **GitHub Release** (`Adbrella v1.0.0-b42`, file `Adbrella-v1.0.0-b42-<sha>-release.apk`), and
+- the rolling **adbrella-latest** release with `adbrella.apk` and `update.json`, which the app's self-updater reads.
 
-The version scheme is `1.0.0-b<build number>`; the build number is also the Android `versionCode`, so newer always installs over older. The same file is attached to the workflow run as an artifact.
+Install once from either. From then on **the app updates itself**: it checks `update.json` on launch (at most every 6 hours) and once a day in the background, downloads the APK, verifies its SHA-256 and installs it through PackageInstaller. Android asks you to confirm the first self-update; afterwards updates apply silently on Android 12+. Toggle it under Settings › Update automatically.
+
+The version scheme is `1.0.0-b<build number>`; the build number is also the Android `versionCode`, so newer always installs over older.
 
 ## First run on the S23
 
-1. Tap the big switch and accept the VPN request. (The VPN is local: nothing goes to a remote server.)
-2. **Settings → Keep it running on Samsung**, do all three steps:
+1. Flip the switch and accept the VPN request. (The VPN is local: nothing goes to a remote server.)
+2. The home screen shows a card with the phone settings still to do; it disappears once they are done. They are also under **Settings → Keep the umbrella open**:
    - Battery → *Unrestricted*, and add MyBlocker to *Never sleeping apps* (Settings → Battery → Background usage limits).
    - Always-on VPN: Settings → Connections → More connection settings → VPN → gear next to MyBlocker → **Always-on VPN on**. Leave *Block connections without VPN* **off**.
    - Private DNS: Settings → Connections → More connection settings → Private DNS → **Off** (or Automatic). In "provider hostname" mode Android sends DNS around the filter.
@@ -26,11 +27,15 @@ The version scheme is `1.0.0-b<build number>`; the build number is also the Andr
 
 ## Features
 
-- **Protection levels**: Light, Balanced, Aggressive (default) or Custom, each a preset of lists. Any list can be toggled individually.
+- **Consumer-facing UI** (Jetpack Compose, Material 3): follows your wallpaper colors on Android 12+ (One UI "Color palette"), four tabs (Umbrella, Activity, Stats, Settings). All technical controls sit under **Settings › Advanced**. A short umbrella splash on launch, then the brand stays out of the way.
+- **Self-updating** from the rolling GitHub release (see above).
+- **Catches hard-coded resolvers**: public resolver IPs (8.8.8.8, 1.1.1.1, 9.9.9.9, …) are routed into the tunnel too, so apps that skip the system DNS are still filtered; their DNS-over-TLS/HTTPS attempts get a TCP reset so they fall back to plain DNS.
+- **Protection strength**: Light, Balanced, Strong (default) or Custom, each a preset of lists. Any list can be toggled individually.
 - **Lists**: curated mobile ad-SDK list (AdMob, Unity Ads, AppLovin, ironSource, Vungle, Chartboost, InMobi, Meta Audience Network, Mintegral, Pangle, …), HaGeZi Light / Pro / Pro++, Samsung telemetry, TikTok tracking, StevenBlack, AdAway, plus any URL you add (hosts, plain domain or `||domain^` format). HaGeZi Pro, Light, Samsung and TikTok ship inside the APK so protection works offline immediately; all lists refresh every 12 hours.
-- **Does not break apps**: blocked names fail instantly (null IP, Pi-hole style) instead of timing out; a built-in safety allowlist keeps Play, push notifications, connectivity checks and Samsung account reachable; the **Query log** shows every lookup with the app that made it and lets you allow a domain with one tap; **Bypass apps** exempts stubborn apps entirely.
+- **Does not break apps**: blocked names fail instantly (null IP, Pi-hole style) instead of timing out; a built-in safety allowlist keeps Play, push notifications, connectivity checks and Samsung account reachable; the **Activity** tab shows every lookup with the app that made it and lets you allow a domain with one tap; **Apps that skip the umbrella** exempts stubborn apps entirely.
+- Works with the usual in-app ad SDKs (AdMob, AppLovin/MAX, Unity Ads, ironSource, Vungle, Chartboost, InMobi, Meta Audience Network, Mintegral, Pangle, Fyber, Tapjoy …), which is what apps like MangaZone and Vampire Survivors use for their banners and interstitials. Their "watch an ad for a reward" offers will report no ad available.
 - **Encrypted upstream**: Quad9, Cloudflare, Google or AdGuard over DNS-over-HTTPS, a custom DoH URL, or plain DNS. Automatic fallback to plain DNS if DoH is unreachable.
-- **Stats & gamification**: today / total / streak, 24-hour and 7-day charts, most blocked domains and apps, estimated data saved, XP levels (Rookie → Legend) and badges with notifications.
+- **Stats & gamification**: today / total / streak, 24-hour and 7-day charts, most blocked domains and apps, estimated data saved, XP levels (Light drizzle → Desert) and badges with notifications.
 - **Always on**: foreground service with auto-restart, starts at boot, Quick Settings tile, Always-on VPN support.
 - IPv4 and IPv6, TCP probes to the fake resolver are refused immediately so Private DNS "Automatic" falls back without delay.
 
@@ -38,7 +43,7 @@ The version scheme is `1.0.0-b<build number>`; the build number is also the Andr
 
 - **In-stream video ads** on YouTube, Instagram, TikTok, Twitch, Spotify: served from the same domains as the content. A DNS filter cannot tell them apart. Use the platform's ad-free plan, or for the web versions a browser with a content blocker (Firefox + uBlock Origin).
 - **In-feed sponsored posts** inside Facebook, Instagram, X, Reddit: delivered inside the normal API responses.
-- **Rewarded ads** ("watch an ad to get X"): the ad request fails, the app shows "no ad available". MyBlocker does not, and will not, tell an app that an ad was watched.
+- **Rewarded ads** ("watch an ad to get X"): the ad request fails, the app shows "no ad available". Adbrella does not, and will not, tell an app that an ad was watched.
 - Apps that hard-code IP addresses or use their own encrypted DNS.
 
 ## Project layout
@@ -52,13 +57,15 @@ app/src/main/java/com/neurone/myblocker/
   upstream/  UdpUpstream, DohUpstream (RFC 8484 POST), UpstreamFactory
   stats/     StatsStore (JSON persisted), QueryLog, Levels, Achievements, AppNames
   system/    Notifications, BootReceiver, BlockerTileService, ListUpdateJobService
-  ui/        Main, Stats, Log, Lists, Rules, Apps, Settings, Help; BarChartView; Ui helpers
+  update/    Updater (manifest check, download, SHA-256 verify, PackageInstaller) + InstallReceiver
+  ui/        Compose: Theme, Splash, AppRoot, Home, Activity, Stats, Settings, Advanced, Lists, Rules, Upstream, Apps
 app/src/main/assets/lists/   bundled blocklists (gzip) + mobile_ads.txt (curated)
 app/src/test/                unit tests for the DNS codec, IP codec, list parser, levels
-.github/workflows/build.yml  test + build + release on every push
+design/                      design canvas sources for the screens (see the Claude artifact link in the PR/commit)
+.github/workflows/build.yml  test + build + versioned release + rolling latest release on every push
 ```
 
-Framework-only Kotlin: no AndroidX, no OkHttp, no coroutines. This keeps the APK tiny and the build simple.
+The engine is framework-only Kotlin (no OkHttp, no Room); the UI uses Jetpack Compose with Material 3.
 
 ## Building locally
 
@@ -72,14 +79,14 @@ The APK lands in `app/build/outputs/apk/release/`.
 
 ## Signing
 
-`keystore/myblocker-dev.jks` (password `myblocker`, alias `myblocker`) is a **development key committed on purpose** so every CI build is installable over the previous one without any setup. Anyone with the repo can sign an APK with it, so treat it like a debug key: fine for your own phone, not for distributing to others.
+`keystore/myblocker-dev.jks` (password `myblocker`, alias `myblocker`) is a **development key committed on purpose** so every CI build is installable over the previous one without any setup, which is also what makes self-update possible. Anyone with the repo can sign an APK with it, so treat it like a debug key: fine for your own phone, not for distributing to others.
 
 To use a private key instead, add these repository secrets and CI will pick them up automatically: `KEYSTORE_BASE64` (base64 of your .jks), `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. Switching keys requires uninstalling the dev-signed build once.
 
 ## Privacy
 
-The query log lives in memory and is gone when the service stops. Statistics are stored in the app's private storage. The app talks only to the DNS resolver you selected and the blocklist download URLs. No analytics, no accounts.
+The activity log lives in memory and is gone when the service stops. Statistics are stored in the app's private storage. The app talks only to the DNS resolver you selected, the blocklist download URLs and GitHub for the update check. No analytics, no accounts.
 
 ## Credits
 
-Blocklists by [HaGeZi](https://github.com/hagezi/dns-blocklists), [StevenBlack](https://github.com/StevenBlack/hosts) and [AdAway](https://github.com/AdAway/adaway.github.io). The DNS-only VPN approach follows DNS66, personalDNSfilter and RethinkDNS.
+Blocklists by [HaGeZi](https://github.com/hagezi/dns-blocklists), [StevenBlack](https://github.com/StevenBlack/hosts) and [AdAway](https://github.com/AdAway/adaway.github.io). The DNS-only VPN approach follows DNS66, personalDNSfilter and RethinkDNS. The Adbrella name, icon, palette, self-updater and resolver capture come from the sibling Adbrella prototype in Neurone00/Carshare.

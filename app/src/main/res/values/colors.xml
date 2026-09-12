@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="accent">#2E7D6B</color>
-    <color name="card">#FFFFFF</color>
-    <color name="window">#F3F5F4</color>
-    <color name="muted">#6B7280</color>
-    <color name="blocked">#C62828</color>
-    <color name="allowed">#2E7D32</color>
-    <color name="bar_empty">#D9DEDC</color>
-    <color name="ic_launcher_background">#1F5F52</color>
+    <color name="ic_launcher_background">#2196F3</color>
+    <color name="splash_background">#1E88E5</color>
 </resources>

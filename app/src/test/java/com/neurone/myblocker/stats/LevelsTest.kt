@@ -8,7 +8,7 @@ class LevelsTest {
     @Test fun levelsProgress() {
         val l1 = Levels.forXp(0)
         assertEquals(1, l1.level)
-        assertEquals("Rookie", l1.title)
+        assertEquals("Light drizzle", l1.title)
         assertEquals(0, l1.progressPercent)
         val l2 = Levels.forXp(100)
         assertEquals(2, l2.level)

@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "MyBlocker"
+rootProject.name = "Adbrella"
 include(":app")

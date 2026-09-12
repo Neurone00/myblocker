@@ -47,8 +47,8 @@ class BlockerTileService : TileService() {
         val tile = qsTile ?: return
         val on = BlockerVpnService.isRunning
         tile.state = if (on) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-        tile.label = "MyBlocker"
-        tile.subtitle = if (on) "Blocked today: ${StatsStore.todayBlocked()}" else "Off"
+        tile.label = "Adbrella"
+        tile.subtitle = if (on) "${StatsStore.todayBlocked()} bounced today" else "Closed"
         tile.updateTile()
     }
 }

@@ -9,9 +9,10 @@ on:
 permissions:
   contents: write
 
+# Every run also updates the rolling "adbrella-latest" release, so never let two overlap.
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  group: adbrella-build
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -51,37 +52,67 @@ jobs:
       - name: Build release APK
         run: ./gradlew --no-daemon assembleRelease
 
-      - name: Collect
+      - name: Collect outputs and write update manifest
         id: collect
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          echo "apk=$APK" >> "$GITHUB_OUTPUT"
-          echo "name=$(basename "$APK" .apk)" >> "$GITHUB_OUTPUT"
-          echo "version=1.0.0-b${{ github.run_number }}" >> "$GITHUB_OUTPUT"
-          sha256sum "$APK" | tee "$APK.sha256"
+          NAME=$(basename "$APK" .apk)
+          VERSION="1.0.0-b${{ github.run_number }}"
+          mkdir -p out
+          cp "$APK" "out/$NAME.apk"
+          cp "$APK" out/adbrella.apk
+          SHA=$(sha256sum out/adbrella.apk | cut -d' ' -f1)
+          SIZE=$(stat -c%s out/adbrella.apk)
+          echo "$SHA  $NAME.apk" > "out/$NAME.apk.sha256"
+          cat > out/update.json <<JSON
+          {
+            "versionCode": ${{ github.run_number }},
+            "versionName": "$VERSION",
+            "apkUrl": "https://github.com/${{ github.repository }}/releases/download/adbrella-latest/adbrella.apk",
+            "sha256": "$SHA",
+            "size": $SIZE,
+            "commit": "${{ github.sha }}"
+          }
+          JSON
+          cat out/update.json
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.collect.outputs.name }}
-          path: |
-            ${{ steps.collect.outputs.apk }}
-            ${{ steps.collect.outputs.apk }}.sha256
+          path: out/*
           if-no-files-found: error
 
-      - name: Publish GitHub release
+      - name: Publish versioned release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.collect.outputs.version }}
-          name: MyBlocker v${{ steps.collect.outputs.version }}
+          name: Adbrella v${{ steps.collect.outputs.version }}
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
           target_commitish: ${{ github.sha }}
           body: |
-            Automated build of `${{ github.ref_name }}` @ ${{ github.sha }}.
+            Build of `${{ github.ref_name }}` @ ${{ github.sha }}.
 
-            **Install:** download the `.apk` below on your phone, open it, allow installs from your browser if asked. Updates install over the previous version (same signing key).
+            **Install:** download the `.apk` below on your phone and open it. Later builds install over earlier ones, and the app updates itself from the rolling **adbrella-latest** release.
 
             Version code `${{ github.run_number }}`, version name `${{ steps.collect.outputs.version }}`.
           files: |
-            ${{ steps.collect.outputs.apk }}
-            ${{ steps.collect.outputs.apk }}.sha256
+            out/${{ steps.collect.outputs.name }}.apk
+            out/${{ steps.collect.outputs.name }}.apk.sha256
+
+      - name: Update rolling "latest" release (what the app's self-updater reads)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: adbrella-latest
+          name: Adbrella (latest build)
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          body: |
+            ☂ Adbrella build ${{ steps.collect.outputs.version }} from `${{ github.ref_name }}` @ ${{ github.sha }}.
+            Install **adbrella.apk** once; from then on the app updates itself from this page.
+          files: |
+            out/adbrella.apk
+            out/update.json

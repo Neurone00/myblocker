@@ -21,6 +21,7 @@ import com.neurone.myblocker.system.Notifications
 import com.neurone.myblocker.ui.MainActivity
 import com.neurone.myblocker.upstream.UpstreamFactory
 import java.util.concurrent.Executors
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Local VPN that captures only DNS. The tunnel gets a private address, a fake
@@ -206,6 +207,10 @@ class BlockerVpnService : VpnService() {
             .addRoute(DNS_ADDRESS_V6, 128)
             .setBlocking(true)
         builder.setMetered(false)
+        if (prefs.catchHardcodedResolvers) {
+            for (ip in HARDCODED_RESOLVERS) runCatching { builder.addRoute(ip, 32) }
+            for (ip in HARDCODED_RESOLVERS_V6) runCatching { builder.addRoute(ip, 128) }
+        }
         val configure = Intent(this, MainActivity::class.java)
         builder.setConfigureIntent(
             PendingIntent.getActivity(this, 0, configure, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
@@ -272,14 +277,33 @@ class BlockerVpnService : VpnService() {
         private const val NOTIFICATION_REFRESH_MS = 30_000L
 
         @Volatile var isRunning: Boolean = false
-            private set
+            private set(v) { field = v; running.value = v }
         /** True while lists load or the tunnel is being (re)established. */
         @Volatile var isStarting: Boolean = false
-            private set
+            private set(v) { field = v; starting.value = v }
         @Volatile var state: String = "Off"
-            private set
+            private set(v) { field = v; stateText.value = v }
         @Volatile var lastError: String? = null
             private set
+
+        /** Observable mirrors of the flags above for Compose. */
+        val running = MutableStateFlow(false)
+        val starting = MutableStateFlow(false)
+        val stateText = MutableStateFlow("Off")
+
+        /**
+         * Public resolvers some apps talk to directly, skipping the system DNS. Routing them into
+         * the tunnel means those lookups are filtered too; DoT/DoH attempts to them get a TCP reset
+         * so the app falls back to plain DNS (which we then filter).
+         */
+        val HARDCODED_RESOLVERS: List<String> = listOf(
+            "8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "9.9.9.9", "149.112.112.112",
+            "208.67.222.222", "208.67.220.220", "94.140.14.14", "94.140.15.15", "76.76.2.0", "76.76.10.0",
+        )
+        val HARDCODED_RESOLVERS_V6: List<String> = listOf(
+            "2001:4860:4860::8888", "2001:4860:4860::8844", "2606:4700:4700::1111", "2606:4700:4700::1001",
+            "2620:fe::fe", "2620:fe::9",
+        )
 
         fun start(context: Context) {
             val i = Intent(context, BlockerVpnService::class.java).setAction(ACTION_START)

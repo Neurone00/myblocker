@@ -10,6 +10,8 @@ import android.util.Log
 import com.neurone.myblocker.Prefs
 import com.neurone.myblocker.filter.FilterEngine
 import com.neurone.myblocker.filter.ListRepository
+import com.neurone.myblocker.update.Updater
+import kotlinx.coroutines.runBlocking
 
 /** Periodic blocklist refresh (every 12 hours, any network). */
 class ListUpdateJobService : JobService() {
@@ -17,14 +19,20 @@ class ListUpdateJobService : JobService() {
 
     override fun onStartJob(params: JobParameters): Boolean {
         val prefs = Prefs.get(this)
-        if (!prefs.autoUpdateLists) return false
+        if (!prefs.autoUpdateLists && !prefs.autoUpdateApp) return false
         worker = Thread({
             var reschedule = false
             try {
-                val results = ListRepository(this).updateEnabled()
+                val results = if (prefs.autoUpdateLists) ListRepository(this).updateEnabled() else emptyMap()
                 Log.i(TAG, "list update: $results")
                 if (results.values.any { it == null }) FilterEngine.reload(this)
                 reschedule = results.values.any { it != null }
+                if (prefs.autoUpdateApp) {
+                    runBlocking {
+                        val info = Updater.check(this@ListUpdateJobService, manual = false)
+                        if (info != null) Updater.downloadAndInstall(this@ListUpdateJobService, info)
+                    }
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "update failed", e)
                 reschedule = true

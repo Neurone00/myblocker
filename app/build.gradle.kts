@@ -3,12 +3,13 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // ---- Versioning -----------------------------------------------------------
 // Base semantic version lives here. CI passes BUILD_NUMBER (the workflow run
 // number) and GIT_SHA so every build gets a unique, sortable version and the
-// APK file name carries it: MyBlocker-v1.0.0-b42-1a2b3c4-release.apk
+// APK file name carries it: Adbrella-v1.0.0-b42-1a2b3c4-release.apk
 val baseVersion = "1.0.0"
 val buildNumber: Int = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 0
 val gitSha: String = System.getenv("GIT_SHA")?.take(7)
@@ -57,6 +58,11 @@ android {
 
     buildFeatures {
         buildConfig = true
+        compose = true
+    }
+
+    packaging {
+        resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}")
     }
 
     lint {
@@ -74,7 +80,7 @@ android {
         val variant = this
         variant.outputs.all {
             val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            output.outputFileName = "MyBlocker-v$fullVersionName-$gitSha-${variant.buildType.name}.apk"
+            output.outputFileName = "Adbrella-v$fullVersionName-$gitSha-${variant.buildType.name}.apk"
         }
     }
 }
@@ -86,7 +92,17 @@ kotlin {
 }
 
 dependencies {
-    // Intentionally framework-only: no AndroidX, no third-party runtime deps.
+    // Engine is framework-only; the UI is Jetpack Compose (Material 3, dynamic color).
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.activity:activity-compose:1.9.2")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    val composeBom = platform("androidx.compose:compose-bom:2024.09.03")
+    implementation(composeBom)
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.1.0")
 }

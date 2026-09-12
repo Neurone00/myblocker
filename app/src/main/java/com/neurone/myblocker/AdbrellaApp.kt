@@ -5,7 +5,7 @@ import com.neurone.myblocker.stats.StatsStore
 import com.neurone.myblocker.system.ListUpdateJobService
 import com.neurone.myblocker.system.Notifications
 
-class MyBlockerApp : Application() {
+class AdbrellaApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Notifications.ensureChannels(this)

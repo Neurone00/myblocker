@@ -1,16 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MyBlocker</string>
-    <string name="tagline">System-wide ad &amp; tracker blocker</string>
-    <string name="today_blocked">blocked today</string>
-    <string name="total_blocked">total blocked</string>
-    <string name="streak">day streak</string>
-    <string name="btn_stats">Stats &amp; badges</string>
-    <string name="btn_log">Query log</string>
-    <string name="btn_lists">Blocklists</string>
-    <string name="btn_rules">Allow / block rules</string>
-    <string name="btn_apps">Bypass apps</string>
-    <string name="btn_settings">Settings</string>
-    <string name="btn_help">Setup guide</string>
-    <string name="footer">Cannot remove in-stream video ads (YouTube, Instagram, TikTok): those share servers with the content. Everything else that comes from an ad or tracking domain is blocked before it loads.</string>
+    <string name="app_name">Adbrella</string>
+    <string name="tagline">Keeps the ads off you.</string>
+    <string name="notification_channel">Umbrella status</string>
+    <string name="notification_channel_badges">Badges</string>
+    <string name="notification_channel_updates">App updates</string>
+    <string name="notification_stop">Close umbrella</string>
+    <string name="update_ready_title">Adbrella update ready</string>
+    <string name="update_ready_text">Tap to install version %1$s</string>
 </resources>

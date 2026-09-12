@@ -2,6 +2,7 @@ package com.neurone.myblocker
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.neurone.myblocker.dns.BlockMode
 import com.neurone.myblocker.filter.ListSource
 import com.neurone.myblocker.filter.ProtectionLevel
@@ -24,6 +25,14 @@ enum class UpstreamMode(val label: String, val detail: String) {
 /** Thin typed wrapper around SharedPreferences. */
 class Prefs private constructor(context: Context) {
     private val sp: SharedPreferences = context.getSharedPreferences("myblocker", Context.MODE_PRIVATE)
+
+    /** Bumped on every change so Compose screens can re-read values. */
+    val changes = MutableStateFlow(0L)
+    private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> changes.value = changes.value + 1 }
+
+    init {
+        sp.registerOnSharedPreferenceChangeListener(listener)
+    }
 
     var level: ProtectionLevel
         get() = ProtectionLevel.from(sp.getString(KEY_LEVEL, null))
@@ -102,6 +111,24 @@ class Prefs private constructor(context: Context) {
         get() = sp.getBoolean(KEY_ONBOARDED, false)
         set(v) = sp.edit().putBoolean(KEY_ONBOARDED, v).apply()
 
+    /** Route well-known public resolver IPs into the tunnel so apps that skip system DNS are filtered too. */
+    var catchHardcodedResolvers: Boolean
+        get() = sp.getBoolean(KEY_CATCH_RESOLVERS, true)
+        set(v) = sp.edit().putBoolean(KEY_CATCH_RESOLVERS, v).apply()
+
+    var autoUpdateApp: Boolean
+        get() = sp.getBoolean(KEY_AUTO_UPDATE_APP, true)
+        set(v) = sp.edit().putBoolean(KEY_AUTO_UPDATE_APP, v).apply()
+
+    var lastUpdateCheck: Long
+        get() = sp.getLong(KEY_LAST_UPDATE_CHECK, 0L)
+        set(v) = sp.edit().putLong(KEY_LAST_UPDATE_CHECK, v).apply()
+
+    /** Android offers no API to read the Always-on VPN choice; we remember that the user visited that screen. */
+    var alwaysOnAcknowledged: Boolean
+        get() = sp.getBoolean(KEY_ALWAYS_ON_ACK, false)
+        set(v) = sp.edit().putBoolean(KEY_ALWAYS_ON_ACK, v).apply()
+
     /** Applies a preset: sets the level and the matching enabled sources. */
     fun applyLevel(level: ProtectionLevel) {
         this.level = level
@@ -138,6 +165,10 @@ class Prefs private constructor(context: Context) {
         private const val KEY_LAST_UPDATE = "last_update"
         private const val KEY_WANTS = "wants_protection"
         private const val KEY_ONBOARDED = "onboarded"
+        private const val KEY_CATCH_RESOLVERS = "catch_resolvers"
+        private const val KEY_AUTO_UPDATE_APP = "auto_update_app"
+        private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
+        private const val KEY_ALWAYS_ON_ACK = "always_on_ack"
 
         @Volatile private var instance: Prefs? = null
 

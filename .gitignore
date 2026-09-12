@@ -9,3 +9,5 @@
 .externalNativeBuild
 .cxx
 *.apk.idsig
+design/adbrella-screens.html
+design/shot.cjs

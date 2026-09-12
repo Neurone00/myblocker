@@ -6,8 +6,8 @@ object Levels {
         0, 100, 500, 1_500, 4_000, 10_000, 25_000, 60_000, 150_000, 400_000, 1_000_000, 2_500_000, 6_000_000,
     )
     private val titles = arrayOf(
-        "Rookie", "Scout", "Sentinel", "Guardian", "Warden", "Ad Slayer", "Tracker Hunter",
-        "Privacy Knight", "Signal Ghost", "Grand Blocker", "Legend", "Mythic", "Ascended",
+        "Light drizzle", "Shower", "Steady rain", "Downpour", "Storm", "Monsoon", "Typhoon",
+        "Cold front", "Ice wall", "Weatherproof", "Bone dry", "Dry season", "Desert",
     )
 
     class Info(val level: Int, val title: String, val xp: Long, val currentFloor: Long, val nextThreshold: Long?) {
@@ -28,24 +28,24 @@ object Levels {
     }
 }
 
-class Achievement(val id: String, val emoji: String, val title: String, val description: String, val check: () -> Boolean)
+class Achievement(val id: String, val badge: String, val title: String, val description: String, val check: () -> Boolean)
 
 /** Badge definitions. Evaluated against [StatsStore]; unlocks are persisted there. */
 object Achievements {
     val ALL: List<Achievement> = listOf(
-        Achievement("first_block", "🛡️", "First blood", "Block your first ad or tracker") { StatsStore.totalBlocked >= 1 },
-        Achievement("blocked_100", "🎯", "Century", "Block 100 requests") { StatsStore.totalBlocked >= 100 },
-        Achievement("blocked_1k", "🔥", "Thousand cuts", "Block 1,000 requests") { StatsStore.totalBlocked >= 1_000 },
-        Achievement("blocked_10k", "⚡", "Ten thousand", "Block 10,000 requests") { StatsStore.totalBlocked >= 10_000 },
-        Achievement("blocked_100k", "🌪️", "Storm wall", "Block 100,000 requests") { StatsStore.totalBlocked >= 100_000 },
-        Achievement("blocked_1m", "👑", "Millionaire", "Block 1,000,000 requests") { StatsStore.totalBlocked >= 1_000_000 },
-        Achievement("day_500", "☀️", "Busy day", "Block 500 requests in a single day") { StatsStore.todayBlocked() >= 500 },
-        Achievement("streak_3", "🌱", "Warming up", "3 days in a row protected") { StatsStore.streakDays() >= 3 },
-        Achievement("streak_7", "📅", "One week", "7 days in a row protected") { StatsStore.streakDays() >= 7 },
-        Achievement("streak_30", "🏆", "Iron month", "30 days in a row protected") { StatsStore.streakDays() >= 30 },
-        Achievement("streak_100", "💎", "Diamond streak", "100 days in a row protected") { StatsStore.streakDays() >= 100 },
-        Achievement("data_100mb", "💾", "Data saver", "Roughly 100 MB of ad traffic never downloaded") { StatsStore.estimatedBytesSaved() >= 100L * 1024 * 1024 },
-        Achievement("data_1gb", "🗄️", "Gigabyte ghost", "Roughly 1 GB of ad traffic never downloaded") { StatsStore.estimatedBytesSaved() >= 1024L * 1024 * 1024 },
+        Achievement("first_block", "1", "First bounce", "The first ad that never made it in") { StatsStore.totalBlocked >= 1 },
+        Achievement("blocked_100", "100", "Cold shoulder", "100 ads and trackers bounced") { StatsStore.totalBlocked >= 100 },
+        Achievement("blocked_1k", "1k", "Dry as a bone", "1,000 bounced") { StatsStore.totalBlocked >= 1_000 },
+        Achievement("blocked_10k", "10k", "Downpour", "10,000 bounced and not a drop got through") { StatsStore.totalBlocked >= 10_000 },
+        Achievement("blocked_100k", "100k", "Monsoon", "100,000 bounced") { StatsStore.totalBlocked >= 100_000 },
+        Achievement("blocked_1m", "1M", "Weatherproof", "One million bounced. Legendary.") { StatsStore.totalBlocked >= 1_000_000 },
+        Achievement("day_500", "500", "Busy day", "500 bounced in a single day") { StatsStore.todayBlocked() >= 500 },
+        Achievement("streak_3", "3d", "Warming up", "3 days in a row under the umbrella") { StatsStore.streakDays() >= 3 },
+        Achievement("streak_7", "7d", "Dry week", "7 days in a row") { StatsStore.streakDays() >= 7 },
+        Achievement("streak_30", "30d", "Dry month", "30 days in a row") { StatsStore.streakDays() >= 30 },
+        Achievement("streak_100", "100d", "Hundred days dry", "100 days in a row") { StatsStore.streakDays() >= 100 },
+        Achievement("data_100mb", "MB", "Data saver", "About 100 MB of ads never downloaded") { StatsStore.estimatedBytesSaved() >= 100L * 1024 * 1024 },
+        Achievement("data_1gb", "GB", "Gigabyte ghost", "About 1 GB of ads never downloaded") { StatsStore.estimatedBytesSaved() >= 1024L * 1024 * 1024 },
     )
 
     /** Returns achievements that just became unlocked. */

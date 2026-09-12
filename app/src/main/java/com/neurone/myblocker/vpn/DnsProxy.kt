@@ -103,9 +103,10 @@ class DnsProxy(
         when (val p = IpPackets.parse(buf, len)) {
             is ParsedPacket.Udp -> if (p.datagram.dstPort == 53) handleDns(p.datagram, buf)
             is ParsedPacket.Syn -> {
-                // TCP to our fake resolver (port 53 fallback or a Private-DNS probe on 853):
-                // refuse immediately so the system falls back instead of waiting for a timeout.
-                if (p.syn.dstPort == 53 || p.syn.dstPort == 853) writeToTun(IpPackets.buildTcpRst(p.syn))
+                // Only resolver addresses are routed here, so any TCP SYN is DNS-over-TCP, a
+                // Private-DNS probe (853) or DNS-over-HTTPS (443) to a captured public resolver.
+                // Refuse immediately so the client falls back to plain DNS instead of timing out.
+                if (p.syn.dstPort == 53 || p.syn.dstPort == 853 || p.syn.dstPort == 443) writeToTun(IpPackets.buildTcpRst(p.syn))
             }
             ParsedPacket.Other -> Unit
         }
