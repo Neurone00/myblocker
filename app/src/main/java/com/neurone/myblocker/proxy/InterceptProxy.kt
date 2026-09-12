@@ -7,6 +7,7 @@ import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.SequenceInputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -96,20 +97,27 @@ class InterceptProxy(
             client.soTimeout = 30_000
             client.tcpNoDelay = true
             val internal = target.dst.contentEquals(INTERNAL_IP)
-            if (target.dstPort == 443 || internal) {
-                val hello = TlsPeek.readClientHello(client.getInputStream())
+            // Decide TLS-vs-plain from the first byte (0x16 = TLS handshake), not the port,
+            // so HTTPS on non-standard ports and plain HTTP on 443 both behave correctly.
+            val raw = client.getInputStream()
+            val first = raw.read()
+            if (first < 0) { client.close(); return }
+            val cin = SequenceInputStream(ByteArrayInputStream(byteArrayOf(first.toByte())), raw)
+            if (first == 0x16) {
+                val hello = TlsPeek.readClientHello(cin)
                 if (hello == null) { client.close(); return }
                 val host = hello.sni ?: if (internal) INTERNAL_HOST else ip(target.dst)
                 val minted = ca.forHost(host)
-                val ssl = minted.sslContext.socketFactory.createSocket(PrefixedSocket(client, hello.consumed), host, target.dstPort, true) as SSLSocket
+                val replay = SequenceInputStream(ByteArrayInputStream(hello.consumed), cin)
+                val ssl = minted.sslContext.socketFactory.createSocket(PrefixedSocket(client, replay), host, target.dstPort, true) as SSLSocket
                 ssl.useClientMode = false
                 val params = ssl.sslParameters
                 params.applicationProtocols = arrayOf("http/1.1")
                 ssl.sslParameters = params
                 ssl.startHandshake()
-                if (internal) serveInternal(ssl) else relayHttp(ssl, host, target, tls = true)
+                if (internal) serveInternal(ssl) else relayHttp(ssl.getInputStream(), ssl.getOutputStream(), ssl, host, target, tls = true)
             } else {
-                relayHttp(client, ip(target.dst), target, tls = false)
+                relayHttp(cin, client.getOutputStream(), client, ip(target.dst), target, tls = false)
             }
         } catch (e: Exception) {
             Log.d(TAG, "connection ended: ${e.javaClass.simpleName} ${e.message}")
@@ -182,9 +190,9 @@ class InterceptProxy(
         return Head(lines[0], headers)
     }
 
-    private fun relayHttp(clientSocket: Socket, host: String, target: Target, tls: Boolean) {
-        val cin = BufferedInputStream(clientSocket.getInputStream(), 1 shl 16)
-        val cout = BufferedOutputStream(clientSocket.getOutputStream(), 1 shl 16)
+    private fun relayHttp(clientIn: InputStream, clientOut: OutputStream, clientSocket: Socket, host: String, target: Target, tls: Boolean) {
+        val cin = BufferedInputStream(clientIn, 1 shl 16)
+        val cout = BufferedOutputStream(clientOut, 1 shl 16)
         var upstream: Socket? = null
         var uin: InputStream? = null
         var uout: OutputStream? = null

@@ -82,8 +82,7 @@ object TlsPeek {
  * A socket view that replays already-consumed bytes before the live stream, so a TLS
  * socket can be layered on top of a connection whose ClientHello was peeked at.
  */
-class PrefixedSocket(private val inner: Socket, prefix: ByteArray) : Socket() {
-    private val input: InputStream = SequenceInputStream(ByteArrayInputStream(prefix), inner.getInputStream())
+class PrefixedSocket(private val inner: Socket, private val input: InputStream) : Socket() {
     private val output: OutputStream = inner.getOutputStream()
 
     override fun getInputStream(): InputStream = input
