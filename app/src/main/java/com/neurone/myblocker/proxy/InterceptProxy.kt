@@ -45,7 +45,8 @@ class InterceptProxy(
 ) {
     private class Target(val dst: ByteArray, val dstPort: Int)
 
-    private val pending = ConcurrentHashMap<Int, Target>()
+    /** Local port -> where the flow was really going, with the time it was registered (see [register]). */
+    private val pending = ConcurrentHashMap<Int, Pair<Target, Long>>()
     private var server: ServerSocket? = null
     private var acceptThread: Thread? = null
     private val pool: ExecutorService = Executors.newCachedThreadPool { r -> Thread(r, "intercept").apply { isDaemon = true } }
@@ -80,19 +81,27 @@ class InterceptProxy(
         pool.shutdownNow()
     }
 
-    /** The relay calls this right after starting a redirected connect; [localPort] is the relay socket's port. */
+    /**
+     * The relay calls this right after starting a redirected connect; [localPort] is the relay socket's
+     * port. Entries are normally consumed by the matching accept, but a flow that dies before the proxy
+     * accepts it would leave one behind forever — and the OS reuses local ports, so a later connection
+     * could inherit a stale destination and be sent to the wrong origin. Old entries are dropped.
+     */
     fun register(localPort: Int, dst: ByteArray, dstPort: Int) {
-        pending[localPort] = Target(dst, dstPort)
+        val now = System.currentTimeMillis()
+        if (pending.size > 64) pending.entries.removeAll { now - it.value.second > PENDING_TTL_MS }
+        pending[localPort] = Target(dst, dstPort) to now
     }
 
     private fun handle(client: Socket) {
         connections++
         DeepCleanStats.connections = connections
-        val target = pending.remove(client.port)
-        if (target == null) {
+        val entry = pending.remove(client.port)
+        if (entry == null || System.currentTimeMillis() - entry.second > PENDING_TTL_MS) {
             runCatching { client.close() }
             return
         }
+        val target = entry.first
         try {
             client.soTimeout = 30_000
             client.tcpNoDelay = true
@@ -637,6 +646,8 @@ else{v.textContent='Only '+n+' of 3 removed ('+(h('t1')?'':'label ')+(h('t2')?''
     companion object {
         private const val TAG = "InterceptProxy"
         private const val MAX_HEAD = 64 * 1024
+        /** How long a registered destination stays valid; a redirected connect is accepted at once. */
+        private const val PENDING_TTL_MS = 30_000L
         private const val MAX_HTML = 4 * 1024 * 1024
         const val INTERNAL_HOST = "rules.adbrella.internal"
         val INTERNAL_IP: ByteArray = byteArrayOf(10, 111, 222.toByte(), 3)

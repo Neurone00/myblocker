@@ -118,6 +118,15 @@ fun AdvancedScreen(nav: Navigator) {
                 needsRestart = true
             }
             RowDivider()
+            SwitchRow(
+                "Force browsers off HTTP/3",
+                "Blocks QUIC so more pages can be tidied. Leave off unless you need it: browsers get no answer at all rather than a refusal, so pages can hang with the progress bar stuck, and it affects every app that uses QUIC.",
+                remember(changes) { prefs.forceHttp11 },
+            ) {
+                prefs.forceHttp11 = it
+                needsRestart = true
+            }
+            RowDivider()
             CertificateRows()
         }
         SectionCard("Diagnostics") {

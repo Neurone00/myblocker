@@ -414,6 +414,7 @@ class BlockerVpnService : VpnService() {
                 // The proxy always runs with deep clean so the internal test page is reachable; browsers are
                 // only redirected into it (tidying) once the toggle is on and the certificate is trusted.
                 val tidy = prefs.interceptBrowsers && CaInstall.isInstalled(this)
+                val dropQuic = tidy && prefs.forceHttp11
                 intercept = InterceptProxy(CaInstall.get(this), { protect(it) }, { WebFilters.cosmeticRules(this) })
                 intercept.userExcluded = prefs.webExcludedHosts
                 intercept.statusProvider = { deepCleanStatusLines() }
@@ -430,11 +431,12 @@ class BlockerVpnService : VpnService() {
                                 com.neurone.myblocker.dns.DnsMessage.isSinkhole(dst)
 
                         override fun dropUdp(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean {
-                            // While intercepting, drop all QUIC (UDP/443). Per-connection UID lookup is
-                            // unreliable for UDP, and if a browser stays on HTTP/3 it bypasses tidying
-                            // entirely. Dropping QUIC makes every client fall back to interceptable TCP;
-                            // non-browser apps simply use TCP and still pass through untouched.
-                            val drop = (tidy && dstPort == 443) || com.neurone.myblocker.dns.DnsMessage.isSinkhole(dst)
+                            // Only when explicitly asked for: UDP has no reliable per-connection UID, so
+                            // this would black-hole QUIC for every app, and a silent drop leaves the
+                            // browser waiting out its own timeouts with the page half-loaded rather than
+                            // failing over to TCP. Stripping Alt-Svc already steers intercepted origins
+                            // onto HTTP/1.1 without breaking anything.
+                            val drop = (dropQuic && dstPort == 443) || com.neurone.myblocker.dns.DnsMessage.isSinkhole(dst)
                             if (drop) DeepCleanStats.quicDropped++
                             return drop
                         }

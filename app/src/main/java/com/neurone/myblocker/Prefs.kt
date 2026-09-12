@@ -131,6 +131,15 @@ class Prefs private constructor(context: Context) {
         get() = sp.getBoolean(KEY_INTERCEPT, true)
         set(v) = sp.edit().putBoolean(KEY_INTERCEPT, v).apply()
 
+    /**
+     * Drop QUIC so browsers fall back to interceptable TCP. Off by default: a silent drop gives the
+     * browser nothing to fail over from, so it waits out its own timeouts and the page hangs with the
+     * progress bar stuck. Alt-Svc stripping already steers intercepted origins onto HTTP/1.1.
+     */
+    var forceHttp11: Boolean
+        get() = sp.getBoolean(KEY_FORCE_H11, false)
+        set(v) = sp.edit().putBoolean(KEY_FORCE_H11, v).apply()
+
     /** Hosts the user wants tunnelled untouched even in deep clean (in addition to the built-in pinned list). */
     var webExcludedHosts: Set<String>
         get() = sp.getStringSet(KEY_WEB_EXCLUDED, null)?.toSet() ?: emptySet()
@@ -203,6 +212,7 @@ class Prefs private constructor(context: Context) {
         private const val KEY_AUTO_UPDATE_APP = "auto_update_app"
         private const val KEY_DEEP_CLEAN = "deep_clean"
         private const val KEY_INTERCEPT = "intercept_browsers"
+        private const val KEY_FORCE_H11 = "force_http11"
         private const val KEY_WEB_EXCLUDED = "web_excluded_hosts"
         private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
         private const val KEY_ALWAYS_ON_ACK = "always_on_ack"
