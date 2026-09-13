@@ -1,7 +1,0 @@
-{
-  "name": "adbrella-collapser-test",
-  "private": true,
-  "description": "Runs the in-page ad-placeholder collapser (COLLAPSER_JS in InterceptProxy.kt) against a synthetic news page in jsdom.",
-  "scripts": { "test": "node test.js" },
-  "devDependencies": { "jsdom": "24.1.3" }
-}

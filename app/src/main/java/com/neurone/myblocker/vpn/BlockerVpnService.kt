@@ -12,9 +12,6 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.neurone.myblocker.Prefs
 import com.neurone.myblocker.filter.FilterEngine
-import com.neurone.myblocker.proxy.DeepCleanStats
-import com.neurone.myblocker.proxy.InterceptProxy
-import com.neurone.myblocker.tls.CaInstall
 import com.neurone.myblocker.web.WebFilters
 import com.neurone.myblocker.stats.Achievements
 import com.neurone.myblocker.stats.AppNames
@@ -37,8 +34,6 @@ class BlockerVpnService : VpnService() {
     private var tun: ParcelFileDescriptor? = null
     private var proxy: DnsProxy? = null
     private var thread: Thread? = null
-    private var relayThread: Thread? = null
-    private var interceptProxy: InterceptProxy? = null
     @Volatile private var stopRequested = false
     private var restarts = 0
     /** Incremented for every tunnel thread; lets a dying thread tell whether it has been superseded. */
@@ -65,36 +60,6 @@ class BlockerVpnService : VpnService() {
 
     @Volatile private var screenOn = true
     private var screenReceiver: android.content.BroadcastReceiver? = null
-    private var certWatchTicks = 0
-
-    /**
-     * Installing the certificate happens in Settings, outside this app, so nothing here would notice
-     * it land: the user would come back to find tidying still off and no reason given. While the
-     * certificate is the only thing missing, check for it, then rebuild the tunnel and say so. Only
-     * while the screen is on and only for a while, so it never becomes a background poll.
-     */
-    private val certWatch = object : Runnable {
-        override fun run() {
-            if (!isRunning || !screenOn || pausedForCar) return
-            val p = Prefs.get(this@BlockerVpnService)
-            if (!p.deepClean || !p.interceptBrowsers || DeepCleanStats.intercepting) return
-            if (CaInstall.isInstalled(this@BlockerVpnService)) {
-                Log.i(TAG, "certificate installed: turning page tidying on")
-                runCatching { Notifications.showCertificateReady(this@BlockerVpnService) }
-                restartVpn()
-                return
-            }
-            if (++certWatchTicks < CERT_WATCH_TICKS) handler.postDelayed(this, CERT_WATCH_MS)
-        }
-    }
-
-    private fun armCertWatch() {
-        val p = Prefs.get(this)
-        if (!p.deepClean || !p.interceptBrowsers || CaInstall.isInstalled(this)) return
-        certWatchTicks = 0
-        handler.removeCallbacks(certWatch)
-        handler.postDelayed(certWatch, CERT_WATCH_MS)
-    }
 
     /** Follows the phone into standby: with the screen off there is no UI left to keep current. */
     private fun startScreenWatch() {
@@ -113,7 +78,6 @@ class BlockerVpnService : VpnService() {
                         if (isRunning) {
                             handler.removeCallbacks(notificationTicker)
                             handler.post(notificationTicker)
-                            armCertWatch()
                         }
                     }
                 }
@@ -246,23 +210,6 @@ class BlockerVpnService : VpnService() {
         }
     }
 
-    /** What the internal test page shows, so a phone can explain itself without a debugger. */
-    private fun deepCleanStatusLines(): List<String> {
-        val p = Prefs.get(this)
-        val cert = CaInstall.isInstalled(this)
-        val n = CaInstall.userCertCount
-        return listOf(
-            "Deep clean (route all traffic): on",
-            "Tidy pages in browsers: " + if (p.interceptBrowsers) "on" else "OFF — turn it on under Advanced",
-            "Adbrella certificate in Android's CA store: " + when {
-                cert -> "yes"
-                n == 0 -> "NO — the store has no user certificates; the install did not go through"
-                n > 0 -> "NO — $n user certificate(s) present but none is Adbrella's (installed as a VPN/app certificate, or an older one?)"
-                else -> "NO"
-            },
-            "Browser tidying active: " + if (DeepCleanStats.intercepting) "yes" else "no",
-        )
-    }
 
     private fun isUsbAccessoryNow(): Boolean {
         return try {
@@ -434,73 +381,10 @@ class BlockerVpnService : VpnService() {
             }
             tun = pfd
             val upstream = UpstreamFactory.create(this) { protect(it) }
-            var relay: FullTunnel? = null
-            var intercept: InterceptProxy? = null
-            DeepCleanStats.reset()
-            DeepCleanStats.intercepting = false
-            if (prefs.deepClean) {
-                val resolverIps = (HARDCODED_RESOLVERS + HARDCODED_RESOLVERS_V6 + DNS_ADDRESS_V4 + DNS_ADDRESS_V6)
-                    .mapNotNull { runCatching { java.net.InetAddress.getByName(it).address.toList() }.getOrNull() }.toHashSet()
-                val internalIp = InterceptProxy.INTERNAL_IP.toList()
-                // The proxy always runs with deep clean so the internal test page is reachable; browsers are
-                // only redirected into it (tidying) once the toggle is on and the certificate is trusted.
-                val tidy = prefs.interceptBrowsers && CaInstall.isInstalled(this)
-                val dropQuic = tidy && prefs.forceHttp11
-                intercept = InterceptProxy(CaInstall.get(this), { protect(it) }, { WebFilters.cosmeticRules(this) })
-                intercept.userExcluded = prefs.webExcludedHosts
-                intercept.statusProvider = { deepCleanStatusLines() }
-                intercept.start()
-                if (tidy) Thread({ WebFilters.cosmeticRules(this) }, "cosmetic-parse").start()
-                val browsers = BrowserUids(this)
-                relay = FullTunnel(
-                    protectTcp = { protect(it) },
-                    protectUdp = { protect(it) },
-                    writeToTun = { pkt -> proxy?.writePacket(pkt) },
-                    policy = object : FullTunnel.Policy {
-                        override fun resetTcp(dst: ByteArray, dstPort: Int): Boolean =
-                            ((dstPort == 53 || dstPort == 853 || dstPort == 443) && dst.toList() in resolverIps) ||
-                                com.neurone.myblocker.dns.DnsMessage.isSinkhole(dst)
-
-                        override fun dropUdp(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean {
-                            // Only when explicitly asked for: UDP has no reliable per-connection UID, so
-                            // this would black-hole QUIC for every app, and a silent drop leaves the
-                            // browser waiting out its own timeouts with the page half-loaded rather than
-                            // failing over to TCP. Stripping Alt-Svc already steers intercepted origins
-                            // onto HTTP/1.1 without breaking anything.
-                            val drop = (dropQuic && dstPort == 443) || com.neurone.myblocker.dns.DnsMessage.isSinkhole(dst)
-                            if (drop) DeepCleanStats.quicDropped++
-                            return drop
-                        }
-
-                        override fun intercept(src: ByteArray, srcPort: Int, dst: ByteArray, dstPort: Int): Boolean {
-                            if (intercept == null) return false
-                            if (dst.toList() == internalIp) return true
-                            if (!tidy) return false
-                            if (dstPort != 443 && dstPort != 80) return false
-                            return browsers.isBrowserTcp(src, srcPort, dst, dstPort)
-                        }
-                    },
-                )
-                val ip = intercept
-                if (ip != null) {
-                    relay.redirect = object : FullTunnel.Redirect {
-                        override val address = java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), ip.port)
-                        override fun register(localPort: Int, dst: ByteArray, dstPort: Int) = ip.register(localPort, dst, dstPort)
-                    }
-                }
-                relayThread = Thread(relay, "relay").also { it.isDaemon = true }
-            }
-            interceptProxy = intercept
-            DeepCleanStats.intercepting = intercept != null && prefs.interceptBrowsers && CaInstall.isInstalled(this)
-            if (!DeepCleanStats.intercepting) handler.post { armCertWatch() }
-            DeepCleanStats.deepClean = relay != null
             val p = DnsProxy(
-                pfd, upstream, prefs.blockMode, MTU, { onQuery(it) }, relay,
-                internalHost = if (intercept != null) InterceptProxy.INTERNAL_HOST else null,
-                internalIp = InterceptProxy.INTERNAL_IP,
+                pfd, upstream, prefs.blockMode, MTU, { onQuery(it) },
             )
             proxy = p
-            relayThread?.start()
             isRunning = true
             isStarting = false
             lastError = null
@@ -516,8 +400,6 @@ class BlockerVpnService : VpnService() {
         } finally {
             val wasStopRequested = stopRequested
             runCatching { tun?.close() }
-            runCatching { interceptProxy?.stop() }
-            interceptProxy = null
             if (gen == generation) {
                 tun = null
                 proxy = null
@@ -556,18 +438,14 @@ class BlockerVpnService : VpnService() {
             .addDnsServer(DNS_ADDRESS_V6)
             .setBlocking(true)
         builder.setMetered(false)
-        if (prefs.deepClean) {
-            // Everything goes through the userspace relay.
-            builder.addRoute("0.0.0.0", 0)
-            builder.addRoute("::", 0)
-        } else {
+        run {
             builder.addRoute(DNS_ADDRESS_V4, 32)
             builder.addRoute(DNS_ADDRESS_V6, 128)
             // Sinkhole ranges behind "Invisible" answers: captured so connections to them are refused at once.
             runCatching { builder.addRoute("198.18.0.0", 15) }
             runCatching { builder.addRoute("2001:db8::", 32) }
         }
-        if (prefs.catchHardcodedResolvers && !prefs.deepClean) {
+        if (prefs.catchHardcodedResolvers) {
             for (ip in HARDCODED_RESOLVERS) runCatching { builder.addRoute(ip, 32) }
             for (ip in HARDCODED_RESOLVERS_V6) runCatching { builder.addRoute(ip, 128) }
         }
@@ -643,9 +521,6 @@ class BlockerVpnService : VpnService() {
         const val TUN_ADDRESS_V6 = "fd53:4d59:424c::1"
         const val DNS_ADDRESS_V6 = "fd53:4d59:424c::2"
         private const val MAX_RESTARTS = 5
-        /** How often to look for the certificate while the user is installing it, and for how long. */
-        private const val CERT_WATCH_MS = 8_000L
-        private const val CERT_WATCH_TICKS = 150 // about twenty minutes
         private const val NOTIFICATION_REFRESH_MS = 120_000L // Handler tick, no wakelock; only refreshes the count while the CPU is already awake
 
         @Volatile var isRunning: Boolean = false
@@ -696,23 +571,6 @@ class BlockerVpnService : VpnService() {
             if (!isRunning) return
             val i = Intent(context, BlockerVpnService::class.java).setAction(ACTION_RESTART)
             context.startForegroundService(i)
-        }
-
-        /**
-         * Deep clean and page tidying are decided when the tunnel comes up. Settings can change
-         * afterwards (a toggle, or the certificate installed from Settings while the tunnel runs),
-         * so callers on resume compare what the tunnel is doing with what is wanted and restart
-         * it when they differ. Safe to call from any thread; a no-op unless something changed.
-         */
-        fun reconcileDeepClean(context: Context) {
-            if (!isRunning || isStarting) return
-            val prefs = Prefs.get(context)
-            val wantDeep = prefs.deepClean
-            val wantIntercept = wantDeep && prefs.interceptBrowsers && CaInstall.isInstalled(context)
-            if (wantDeep != DeepCleanStats.deepClean || wantIntercept != DeepCleanStats.intercepting) {
-                Log.i(TAG, "deep clean settings changed (relay $wantDeep, tidy $wantIntercept): restarting tunnel")
-                restartIfRunning(context)
-            }
         }
     }
 }

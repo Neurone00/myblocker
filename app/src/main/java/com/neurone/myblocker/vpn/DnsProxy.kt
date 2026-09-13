@@ -41,11 +41,6 @@ class DnsProxy(
     private val blockMode: BlockMode,
     private val mtu: Int,
     private val listener: (QueryEvent) -> Unit,
-    /** Present in deep-clean mode: everything that is not DNS is handed to the relay. */
-    private val relay: FullTunnel? = null,
-    /** Name answered locally with [internalIp] (the deep-clean stylesheet host), or null. */
-    private val internalHost: String? = null,
-    private val internalIp: ByteArray = ByteArray(4),
 ) : Runnable {
     @Volatile private var running = true
     private val input = FileInputStream(tun.fileDescriptor)
@@ -111,7 +106,6 @@ class DnsProxy(
             }
         }
         running = false
-        relay?.stop()
         workers.shutdownNow()
         runCatching { upstream.close() }
         runCatching { wakeRead?.let { Os.close(it) } }
@@ -130,12 +124,10 @@ class DnsProxy(
     private fun handlePacket(buf: ByteArray, len: Int) {
         when (val p = IpPackets.parse(buf, len)) {
             is ParsedPacket.Udp -> {
-                if (p.datagram.dstPort == 53) handleDns(p.datagram, buf) else relay?.offer(buf, len)
+                if (p.datagram.dstPort == 53) handleDns(p.datagram, buf)
             }
             is ParsedPacket.Tcp -> {
-                if (relay != null) {
-                    relay.offer(buf, len)
-                } else if (p.segment.syn && !p.segment.ackFlag) {
+                if (p.segment.syn && !p.segment.ackFlag) {
                     // DNS-only mode: only resolver addresses are routed here, so any TCP SYN is
                     // DNS-over-TCP, a Private-DNS probe (853) or DNS-over-HTTPS (443) to a captured
                     // public resolver. Refuse immediately so the client falls back to plain DNS.
@@ -154,12 +146,6 @@ class DnsProxy(
         if (udp.payloadLength < DnsMessage.HEADER_LENGTH) return
         val query = buf.copyOfRange(udp.payloadOffset, udp.payloadOffset + udp.payloadLength)
         val q = DnsMessage.parseQuestion(query) ?: return
-        val internal = internalHost
-        if (internal != null && q.name == internal) {
-            // The stylesheet host for deep clean lives inside the tunnel.
-            reply(udp, DnsMessage.buildAddressAnswer(query, q, internalIp))
-            return
-        }
         val decision = FilterEngine.decide(q.name)
         listener(QueryEvent(System.currentTimeMillis(), q, decision, udp))
         if (decision.blocked) {

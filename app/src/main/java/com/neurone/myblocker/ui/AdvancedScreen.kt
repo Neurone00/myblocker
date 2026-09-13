@@ -99,36 +99,6 @@ fun AdvancedScreen(nav: Navigator) {
                 needsRestart = true
             }
         }
-        SectionCard("Deep clean (beta)") {
-            SwitchRow(
-                "Route all traffic through Adbrella",
-                "Foundation for tidying pages inside Chrome. Every connection is relayed by the app instead of only DNS. Turn off if anything misbehaves.",
-                remember(changes) { prefs.deepClean },
-            ) {
-                prefs.deepClean = it
-                needsRestart = true
-            }
-            RowDivider()
-            SwitchRow(
-                "Tidy pages in browsers",
-                "Opens browser HTTPS with the certificate below to hide empty ad boxes. Needs that certificate installed or nothing is tidied. Only Chrome, Brave, Samsung Internet and similar; other apps are never touched.",
-                remember(changes) { prefs.interceptBrowsers },
-            ) {
-                prefs.interceptBrowsers = it
-                needsRestart = true
-            }
-            RowDivider()
-            SwitchRow(
-                "Force browsers off HTTP/3",
-                "Blocks QUIC so more pages can be tidied. Leave off unless you need it: browsers get no answer at all rather than a refusal, so pages can hang with the progress bar stuck, and it affects every app that uses QUIC.",
-                remember(changes) { prefs.forceHttp11 },
-            ) {
-                prefs.forceHttp11 = it
-                needsRestart = true
-            }
-            RowDivider()
-            CertificateRows()
-        }
         SectionCard("Diagnostics") {
             SwitchRow("Activity log", "Keep the last 1,500 lookups with the app that made them. Needed for per-app stats.", remember(changes) { prefs.logEnabled }) { prefs.logEnabled = it }
             RowDivider()

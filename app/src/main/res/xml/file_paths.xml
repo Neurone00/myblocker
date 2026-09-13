@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <!-- The public CA certificate, handed to Android's certificate installer by content Uri. -->
-    <files-path name="ca" path="ca/" />
-</paths>

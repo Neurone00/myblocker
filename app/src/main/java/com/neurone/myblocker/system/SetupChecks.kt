@@ -11,7 +11,6 @@ import android.os.PowerManager
 import android.provider.Settings
 import com.neurone.myblocker.Prefs
 import com.neurone.myblocker.R
-import com.neurone.myblocker.tls.CaInstall
 import java.util.concurrent.Executor
 
 /** The One UI settings that decide whether the umbrella stays open all day. */
@@ -41,27 +40,7 @@ object SetupChecks {
         val battery = batteryUnrestricted(context)
         val dns = privateDnsOk(context)
         val alwaysOn = alwaysOnOk(context)
-        val prefs = Prefs.get(context)
-        val tidy = mutableListOf<Item>()
-        if (prefs.deepClean) {
-            // Deep clean is on: page tidying also needs its toggle and the certificate, and people
-            // reasonably expect the ad boxes to go once "the options are active".
-            val toggled = prefs.interceptBrowsers
-            tidy += Item(
-                "tidy", "Turn on page tidying in browsers",
-                if (toggled) "Done." else "Advanced › Deep clean › \"Tidy pages in browsers\", so empty ad boxes disappear in Chrome.",
-                toggled, null, screen = "advanced",
-            )
-            if (toggled) {
-                val cert = CaInstall.isInstalled(context)
-                tidy += Item(
-                    "cert", "Install the page-tidying certificate",
-                    if (cert) "Done." else "Without it Chrome cannot be tidied and pages pass through untouched. Advanced › Certificate: save it, then install it from Settings.",
-                    cert, null, screen = "advanced",
-                )
-            }
-        }
-        return tidy + listOf(
+        return listOf(
             Item(
                 "battery", "Let Adbrella run in the background",
                 if (battery) "Done. The phone will not close the umbrella to save battery." else "Battery → Unrestricted, so One UI stops closing the umbrella.",
