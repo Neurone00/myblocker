@@ -66,11 +66,11 @@ import com.neurone.myblocker.vpn.BlockerVpnService
 import kotlinx.coroutines.launch
 
 /**
- * How far open the umbrella rests while protection is off. The canopy's width lags the opening, so
- * this sits higher than half to actually look half-open: about half the full width, with the hem
- * already gathering down the shaft.
+ * How far open the umbrella rests while protection is off: properly furled, the same shape as the
+ * status bar's closed icon. Half-open was tried and looks wrong at 44dp — the scallops fall below a
+ * pixel and the canopy reads as a mushroom cap — so the resting state commits to being shut.
  */
-private const val UMBRELLA_REST = 0.58f
+private const val UMBRELLA_REST = 0.18f
 
 @Composable
 fun HomeScreen(nav: Navigator) {
@@ -186,7 +186,7 @@ fun HomeScreen(nav: Navigator) {
                     umbrellaTilt.snapTo(0f)
                     umbrellaSquash.snapTo(1f)
                     while (true) {
-                        umbrellaOpen.animateTo(0.72f, tween(650, easing = FastOutSlowInEasing))
+                        umbrellaOpen.animateTo(0.62f, tween(650, easing = FastOutSlowInEasing))
                         umbrellaOpen.animateTo(UMBRELLA_REST, tween(650, easing = FastOutSlowInEasing))
                     }
                 }

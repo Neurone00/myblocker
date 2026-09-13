@@ -8,7 +8,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Umbrella
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -22,9 +21,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
+import com.neurone.myblocker.R
 
-enum class Tab(val label: String, val icon: ImageVector) {
-    Home("Umbrella", Icons.Filled.Umbrella),
+/** [icon] is null for the Umbrella tab, which draws Adbrella's own umbrella instead of a stock one. */
+enum class Tab(val label: String, val icon: ImageVector?) {
+    Home("Umbrella", null),
     Activity("Activity", Icons.Filled.History),
     Stats("Stats", Icons.Filled.BarChart),
     Settings("Settings", Icons.Filled.Settings),
@@ -50,7 +52,11 @@ fun AppRoot() {
                         NavigationBarItem(
                             selected = tab == t,
                             onClick = { tab = t },
-                            icon = { Icon(t.icon, contentDescription = t.label) },
+                            icon = {
+                                val v = t.icon
+                                if (v != null) Icon(v, contentDescription = t.label)
+                                else Icon(painterResource(R.drawable.ic_umbrella), contentDescription = t.label)
+                            },
                             label = { Text(t.label) },
                         )
                     }
