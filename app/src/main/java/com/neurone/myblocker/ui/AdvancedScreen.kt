@@ -73,8 +73,8 @@ fun AdvancedScreen(nav: Navigator) {
                 "Blocked answer",
                 when (blockMode) {
                     BlockMode.INVISIBLE -> "Invisible: a real-looking address that goes nowhere, so apps checking for a blocker see none. Recommended"
-                    BlockMode.NULL_IP -> "Null IP (0.0.0.0 / ::), the classic Pi-hole answer"
-                    BlockMode.NXDOMAIN -> "NXDOMAIN"
+                    BlockMode.NULL_IP -> "Null IP (0.0.0.0 / ::) — the classic Pi-hole answer, and the one apps test for. Tap to change."
+                    BlockMode.NXDOMAIN -> "NXDOMAIN — also a giveaway: a name that exists everywhere else does not resolve here. Tap to change."
                 },
                 onClick = {
                     prefs.blockMode = when (blockMode) {
@@ -82,6 +82,7 @@ fun AdvancedScreen(nav: Navigator) {
                         BlockMode.NULL_IP -> BlockMode.NXDOMAIN
                         BlockMode.NXDOMAIN -> BlockMode.INVISIBLE
                     }
+                    // Leaving a detectable answer selected is almost always a mistake, so say so.
                     needsRestart = true
                 },
             )

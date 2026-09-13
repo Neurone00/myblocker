@@ -269,7 +269,8 @@ fun AboutScreen(nav: Navigator) {
         )
         AboutSection(
             "Apps that complain about ad blockers",
-            "Apps look for a blocker in three ways. The usual one resolves a known ad domain and checks for a 0.0.0.0 or localhost answer; Adbrella's Invisible answer (Advanced › Blocked answer, the default) returns a real-looking address that it refuses itself, so the app only sees an ad server that is down.",
+            "Apps look for a blocker in a handful of ways, and the wall usually lists them itself. The common one resolves a known ad domain and checks for a 0.0.0.0 or localhost answer: Adbrella's Invisible answer (Advanced › Blocked answer, the default) returns a real-looking address that it refuses itself, so the app only sees an ad server that is down. If you have switched that setting to Null IP or NXDOMAIN, switch it back first — those are exactly what such a check looks for.",
+            "Private DNS set to a provider hostname is another thing they check, and it also routes lookups around Adbrella. Keep it Off or Automatic (the home card checks this for you).",
             "Some apps refuse to run while any VPN is active. Add them under Apps that skip the umbrella: they stop seeing one, but they also get no blocking.",
             "A few only unlock once their ad SDK has actually received an ad. That cannot be faked without impersonating the ad server, and Adbrella does not do that.",
         )
