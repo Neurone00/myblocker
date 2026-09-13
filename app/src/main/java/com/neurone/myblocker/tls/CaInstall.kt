@@ -75,6 +75,15 @@ object CaInstall {
         }
     }
 
+    /**
+     * Android refuses to put anything in credential storage unless the phone has a real lock screen,
+     * and the install flow then ends without saying why. Defaults to true if the check itself fails,
+     * so a broken lookup never produces a wrong accusation.
+     */
+    fun hasScreenLock(context: Context): Boolean = runCatching {
+        (context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isDeviceSecure
+    }.getOrDefault(true)
+
     /** Writes the PEM certificate to the public Downloads folder. Returns the file's Uri or null. */
     fun exportToDownloads(context: Context): Uri? {
         val ca = get(context)

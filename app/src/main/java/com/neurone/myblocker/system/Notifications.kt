@@ -19,6 +19,7 @@ object Notifications {
     const val ID_RUNNING = 1
     const val ID_UPDATE = 2
     private const val ID_ACHIEVEMENT_BASE = 1000
+    private const val ID_CERTIFICATE = 2
 
     fun ensureChannels(context: Context) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -72,6 +73,23 @@ object Notifications {
     fun updateRunning(context: Context) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(ID_RUNNING, buildRunning(context))
+    }
+
+    /** The certificate landed while the user was in Settings: say so there and then. */
+    fun showCertificateReady(context: Context) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val open = PendingIntent.getActivity(
+            context, 3, Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val n = Notification.Builder(context, CHANNEL_ACHIEVEMENTS)
+            .setSmallIcon(R.drawable.ic_umbrella)
+            .setContentTitle("Certificate installed")
+            .setContentText("Page tidying is on. Empty ad boxes will be removed in Chrome and Brave.")
+            .setAutoCancel(true)
+            .setContentIntent(open)
+            .build()
+        nm.notify(ID_CERTIFICATE, n)
     }
 
     fun showAchievement(context: Context, a: Achievement) {

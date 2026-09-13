@@ -55,6 +55,14 @@ fun CertificateRows() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        if (!installed && !CaInstall.hasScreenLock(context)) {
+            Text(
+                "This phone has no screen lock. Android will not keep a certificate at all without a PIN, pattern or password, and the install ends without saying so. Set one first, then come back.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
         if (!installed) {
             val n = CaInstall.userCertCount
             if (n > 0) {
@@ -83,7 +91,9 @@ fun CertificateRows() {
                                         "2. Install from device storage\n" +
                                         "3. CA certificate — then Install anyway\n" +
                                         "4. Pick ${CaInstall.FILE_NAME} (in Downloads)\n\n" +
-                                        "Come back and this row turns green by itself."
+                                        "You do not have to come back: the moment it lands, tidying turns on and a notification says so.\n\n" +
+                                        "Shorter route if that menu is hard to find: open My Files › Downloads and tap ${CaInstall.FILE_NAME}. " +
+                                        "Android blocks Adbrella from opening it, but the system file manager is allowed to."
                                 CertInstallRoute.SAVED_ONLY ->
                                     "Saved to Downloads as ${CaInstall.FILE_NAME}, but Settings would not open. Open Settings › Security and privacy › Other security settings › Install from device storage › CA certificate and pick that file."
                                 CertInstallRoute.FAILED ->

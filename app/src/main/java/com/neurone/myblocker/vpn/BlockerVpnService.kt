@@ -65,6 +65,36 @@ class BlockerVpnService : VpnService() {
 
     @Volatile private var screenOn = true
     private var screenReceiver: android.content.BroadcastReceiver? = null
+    private var certWatchTicks = 0
+
+    /**
+     * Installing the certificate happens in Settings, outside this app, so nothing here would notice
+     * it land: the user would come back to find tidying still off and no reason given. While the
+     * certificate is the only thing missing, check for it, then rebuild the tunnel and say so. Only
+     * while the screen is on and only for a while, so it never becomes a background poll.
+     */
+    private val certWatch = object : Runnable {
+        override fun run() {
+            if (!isRunning || !screenOn || pausedForCar) return
+            val p = Prefs.get(this@BlockerVpnService)
+            if (!p.deepClean || !p.interceptBrowsers || DeepCleanStats.intercepting) return
+            if (CaInstall.isInstalled(this@BlockerVpnService)) {
+                Log.i(TAG, "certificate installed: turning page tidying on")
+                runCatching { Notifications.showCertificateReady(this@BlockerVpnService) }
+                restartVpn()
+                return
+            }
+            if (++certWatchTicks < CERT_WATCH_TICKS) handler.postDelayed(this, CERT_WATCH_MS)
+        }
+    }
+
+    private fun armCertWatch() {
+        val p = Prefs.get(this)
+        if (!p.deepClean || !p.interceptBrowsers || CaInstall.isInstalled(this)) return
+        certWatchTicks = 0
+        handler.removeCallbacks(certWatch)
+        handler.postDelayed(certWatch, CERT_WATCH_MS)
+    }
 
     /** Follows the phone into standby: with the screen off there is no UI left to keep current. */
     private fun startScreenWatch() {
@@ -83,6 +113,7 @@ class BlockerVpnService : VpnService() {
                         if (isRunning) {
                             handler.removeCallbacks(notificationTicker)
                             handler.post(notificationTicker)
+                            armCertWatch()
                         }
                     }
                 }
@@ -461,6 +492,7 @@ class BlockerVpnService : VpnService() {
             }
             interceptProxy = intercept
             DeepCleanStats.intercepting = intercept != null && prefs.interceptBrowsers && CaInstall.isInstalled(this)
+            if (!DeepCleanStats.intercepting) handler.post { armCertWatch() }
             DeepCleanStats.deepClean = relay != null
             val p = DnsProxy(
                 pfd, upstream, prefs.blockMode, MTU, { onQuery(it) }, relay,
@@ -611,6 +643,9 @@ class BlockerVpnService : VpnService() {
         const val TUN_ADDRESS_V6 = "fd53:4d59:424c::1"
         const val DNS_ADDRESS_V6 = "fd53:4d59:424c::2"
         private const val MAX_RESTARTS = 5
+        /** How often to look for the certificate while the user is installing it, and for how long. */
+        private const val CERT_WATCH_MS = 8_000L
+        private const val CERT_WATCH_TICKS = 150 // about twenty minutes
         private const val NOTIFICATION_REFRESH_MS = 120_000L // Handler tick, no wakelock; only refreshes the count while the CPU is already awake
 
         @Volatile var isRunning: Boolean = false
