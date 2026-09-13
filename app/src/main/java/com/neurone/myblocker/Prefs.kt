@@ -13,6 +13,18 @@ enum class UpstreamMode(val label: String, val detail: String) {
     DOH_CLOUDFLARE("Cloudflare 1.1.1.1 (DNS-over-HTTPS)", "Encrypted. Very fast, no extra filtering."),
     DOH_GOOGLE("Google (DNS-over-HTTPS)", "Encrypted. Fast."),
     DOH_ADGUARD("AdGuard (DNS-over-HTTPS)", "Encrypted. Extra ad filtering on the resolver side."),
+    DOH_CLOUDFLARE_FAMILY(
+        "Cloudflare for Families (DNS-over-HTTPS)",
+        "Encrypted. Blocks malware and adult sites at the resolver, for every app on the phone.",
+    ),
+    DOH_ADGUARD_FAMILY(
+        "AdGuard Family Protection (DNS-over-HTTPS)",
+        "Encrypted. Ads, adult sites and forced safe search on Google, Bing and YouTube.",
+    ),
+    DOH_CLEANBROWSING_FAMILY(
+        "CleanBrowsing Family (DNS-over-HTTPS)",
+        "Encrypted. Adult and mixed-content sites blocked, safe search and YouTube restricted mode enforced.",
+    ),
     DOH_CUSTOM("Custom DNS-over-HTTPS URL", "Any RFC 8484 endpoint, e.g. https://dns.example/dns-query"),
     SYSTEM("Network DNS (unencrypted)", "Uses the DNS servers of the Wi-Fi or mobile network you are on."),
     PLAIN_CUSTOM("Custom DNS server IP (unencrypted)", "Plain DNS to an IP address you choose.");

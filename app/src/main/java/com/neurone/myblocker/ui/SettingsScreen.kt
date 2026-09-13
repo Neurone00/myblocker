@@ -268,6 +268,11 @@ fun AboutScreen(nav: Navigator) {
             "For stubborn apps, add them under Settings › Apps that skip the umbrella.",
         )
         AboutSection(
+            "A phone your child uses",
+            "Two things here work at the DNS level, so they cover every app and browser on the phone at once, with nothing to install in each one. Under Advanced › Upstream resolver, Cloudflare for Families, AdGuard Family Protection or CleanBrowsing Family filter adult sites at the resolver; the AdGuard and CleanBrowsing ones also force safe search on Google, Bing and YouTube. Under Advanced › Blocklists, \"Adult sites\" and \"Adult and gambling sites\" do the same from lists on the phone, and can be combined with any resolver.",
+            "What this does not do: it cannot tell one video from another on YouTube or TikTok, where everything comes from the same domains, and it cannot judge whether a particular ad is suitable — it only knows domain names. It also stops at this app: anyone who can open Adbrella can switch it off. For rules that hold, use Google Family Link and the age settings in the Play Store, and treat this as a layer underneath them rather than a replacement.",
+        )
+        AboutSection(
             "Apps that complain about ad blockers",
             "Apps look for a blocker in a handful of ways, and the wall usually lists them itself. The common one resolves a known ad domain and checks for a 0.0.0.0 or localhost answer: Adbrella's Invisible answer (Advanced › Blocked answer, the default) returns a real-looking address that it refuses itself, so the app only sees an ad server that is down. If you have switched that setting to Null IP or NXDOMAIN, switch it back first — those are exactly what such a check looks for.",
             "Private DNS set to a provider hostname is another thing they check, and it also routes lookups around Adbrella. Keep it Off or Automatic (the home card checks this for you).",

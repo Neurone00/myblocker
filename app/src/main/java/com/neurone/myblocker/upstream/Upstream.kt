@@ -140,6 +140,9 @@ object UpstreamFactory {
     val CLOUDFLARE: List<InetAddress> = addrs("1.1.1.1", "1.0.0.1", "2606:4700:4700::1111")
     val GOOGLE: List<InetAddress> = addrs("8.8.8.8", "8.8.4.4", "2001:4860:4860::8888")
     val ADGUARD: List<InetAddress> = addrs("94.140.14.14", "94.140.15.15")
+    val CLOUDFLARE_FAMILY: List<InetAddress> = addrs("1.1.1.3", "1.0.0.3", "2606:4700:4700::1113")
+    val ADGUARD_FAMILY: List<InetAddress> = addrs("94.140.14.15", "94.140.15.16")
+    val CLEANBROWSING_FAMILY: List<InetAddress> = addrs("185.228.168.168", "185.228.169.168")
 
     fun create(context: Context, protect: (DatagramSocket) -> Boolean): Upstream {
         val prefs = Prefs.get(context)
@@ -149,6 +152,12 @@ object UpstreamFactory {
             UpstreamMode.DOH_CLOUDFLARE -> DohUpstream("https://cloudflare-dns.com/dns-query", UdpUpstream({ CLOUDFLARE }, protect))
             UpstreamMode.DOH_GOOGLE -> DohUpstream("https://dns.google/dns-query", UdpUpstream({ GOOGLE }, protect))
             UpstreamMode.DOH_ADGUARD -> DohUpstream("https://dns.adguard-dns.com/dns-query", UdpUpstream({ ADGUARD }, protect))
+            UpstreamMode.DOH_CLOUDFLARE_FAMILY ->
+                DohUpstream("https://family.cloudflare-dns.com/dns-query", UdpUpstream({ CLOUDFLARE_FAMILY }, protect))
+            UpstreamMode.DOH_ADGUARD_FAMILY ->
+                DohUpstream("https://family.adguard-dns.com/dns-query", UdpUpstream({ ADGUARD_FAMILY }, protect))
+            UpstreamMode.DOH_CLEANBROWSING_FAMILY ->
+                DohUpstream("https://doh.cleanbrowsing.org/doh/family-filter/", UdpUpstream({ CLEANBROWSING_FAMILY }, protect))
             UpstreamMode.DOH_CUSTOM -> {
                 val url = prefs.customDohUrl
                 if (url.startsWith("https://")) DohUpstream(url, system) else system

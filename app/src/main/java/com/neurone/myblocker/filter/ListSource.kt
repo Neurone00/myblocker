@@ -107,6 +107,26 @@ data class ListSource(
                 builtin = true,
                 levels = emptySet(),
             ),
+            // Content lists, for a phone a child uses. Off by default and in no protection level:
+            // they are a deliberate choice, not part of ad blocking.
+            ListSource(
+                id = "hagezi_nsfw",
+                name = "Adult sites (HaGeZi NSFW)",
+                description = "Blocks pornography domains everywhere on the phone, in apps as well as browsers. Off by default.",
+                url = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/nsfw-onlydomains.txt",
+                asset = null,
+                builtin = true,
+                levels = emptySet(),
+            ),
+            ListSource(
+                id = "stevenblack_gambling_porn",
+                name = "Adult and gambling sites (StevenBlack)",
+                description = "The same idea plus gambling, and the ads and trackers that come with both. Heavier than the list above. Off by default.",
+                url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-porn/hosts",
+                asset = null,
+                builtin = true,
+                levels = emptySet(),
+            ),
         )
 
         fun fromJson(o: JSONObject): ListSource = ListSource(
