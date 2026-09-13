@@ -95,6 +95,15 @@ class InterceptEndToEndTest {
                                     val gz = ByteArrayOutputStream().also { GZIPOutputStream(it).use { g -> g.write(html.toByteArray()) } }.toByteArray()
                                     out.write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Encoding: gzip\r\nContent-Security-Policy: default-src 'self'\r\nAlt-Svc: h3=\":443\"\r\nContent-Length: ${gz.size}\r\n\r\n".toByteArray())
                                     out.write(gz)
+                                } else if (path == "/longheader") {
+                                    // A news site running a full ad stack sends a CSP line well past 8 KB.
+                                    val csp = "default-src 'self'; script-src " +
+                                        (1..400).joinToString(" ") { "https://ad-$it.example.com" }
+                                    out.write(
+                                        ("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Security-Policy: " + csp +
+                                            "\r\nContent-Length: ${html.length}\r\n\r\n").toByteArray(),
+                                    )
+                                    out.write(html.toByteArray())
                                 } else if (path == "/chunked") {
                                     out.write("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nTransfer-Encoding: chunked\r\n\r\n".toByteArray())
                                     val bytes = html.toByteArray()
@@ -178,6 +187,12 @@ class InterceptEndToEndTest {
         assertTrue(r2.head.contains("Content-Security-Policy: default-src 'self'; style-src 'self' https://rules.adbrella.internal"))
 
         // 3. chunked HTML is de-chunked and injected
+        // A single header line far past 8 KB used to throw "line too long" and kill the connection,
+        // which made sites with a big CSP permanently unreachable while tidying was on.
+        val rLong = viaProxy("test.local", originAddr, origin.localPort, "GET /longheader HTTP/1.1\r\nHost: test.local\r\nConnection: close\r\n\r\n")
+        assertTrue("long header line must not break the page", rLong.head.startsWith("HTTP/1.1 200"))
+        assertTrue(String(rLong.body).contains("rules.adbrella.internal/g.css"))
+
         val r3 = viaProxy("test.local", originAddr, origin.localPort, "GET /chunked HTTP/1.1\r\nHost: test.local\r\nConnection: close\r\n\r\n")
         assertTrue(String(r3.body).contains("rules.adbrella.internal/g.css"))
         assertFalse(r3.head.contains("Transfer-Encoding"))

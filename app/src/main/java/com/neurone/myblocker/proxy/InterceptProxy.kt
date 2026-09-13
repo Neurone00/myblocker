@@ -102,6 +102,7 @@ class InterceptProxy(
             return
         }
         val target = entry.first
+        var intercepted: String? = null
         try {
             client.soTimeout = 30_000
             client.tcpNoDelay = true
@@ -138,6 +139,7 @@ class InterceptProxy(
                         DeepCleanStats.handshakeFailures = handshakeFailures
                         // Pass this site through untouched next time, so a reload works even if
                         // tidying never can here.
+                        // A refused certificate is conclusive on its own, so give up at once.
                         if (hello.sni != null) {
                             troubled.add(host.lowercase().trimEnd('.'))
                             DeepCleanStats.givenUp = troubled.size
@@ -145,8 +147,12 @@ class InterceptProxy(
                     }
                     throw e
                 }
-                if (internal) serveInternal(ssl.getInputStream(), ssl.getOutputStream(), tls = true)
-                else relayHttp(ssl.getInputStream(), ssl.getOutputStream(), ssl, host, target, tls = true)
+                if (internal) {
+                    serveInternal(ssl.getInputStream(), ssl.getOutputStream(), tls = true)
+                } else {
+                    intercepted = host
+                    relayHttp(ssl.getInputStream(), ssl.getOutputStream(), ssl, host, target, tls = true)
+                }
             } else if (internal) {
                 // Plain HTTP works without the certificate, so the test page can explain what is missing.
                 serveInternal(cin, client.getOutputStream(), tls = false)
@@ -155,6 +161,10 @@ class InterceptProxy(
             }
         } catch (e: Exception) {
             Log.d(TAG, "connection ended: ${e.javaClass.simpleName} ${e.message}")
+            // Anything that kills an intercepted connection after the handshake — an oversized head,
+            // framing we cannot follow, an origin that stops talking — would otherwise repeat on every
+            // reload and leave the site permanently unreachable. Count it against the host instead.
+            if (e !is SocketTimeoutException) intercepted?.let { noteFailure(it) }
             errorListener?.invoke(e)
         } finally {
             runCatching { client.close() }
@@ -175,6 +185,25 @@ class InterceptProxy(
      * because tidying cannot handle a site, so the first failure is the last one it costs.
      */
     private val troubled = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /** Failures seen per host. One can be a browser abandoning a connection; two is the site. */
+    private val failures = ConcurrentHashMap<String, Int>()
+
+    /**
+     * Records that interception went wrong for [host]. A single failure is ignored because browsers
+     * routinely abandon connections mid-flight; the second gives the site up for good, so a page that
+     * trips the proxy for any reason works on the next reload instead of failing forever.
+     */
+    private fun noteFailure(host: String) {
+        val h = host.lowercase().trimEnd('.')
+        if (h.isEmpty() || h in troubled) return
+        if ((failures.merge(h, 1, Int::plus) ?: 1) >= 2) {
+            troubled.add(h)
+            failures.remove(h)
+            DeepCleanStats.givenUp = troubled.size
+            Log.i(TAG, "giving up on $h: passing it through untouched from now on")
+        }
+    }
 
     /** Sites given up on and passed through raw since the tunnel started; shown in the UI. */
     val troubledHosts: List<String> get() = synchronized(troubled) { troubled.sorted() }
@@ -286,8 +315,7 @@ class InterceptProxy(
                     } catch (e: Exception) {
                         // We cannot reach the origin the way interception needs to; hand this site
                         // back to the browser untouched from now on.
-                        troubled.add(host.lowercase().trimEnd('.'))
-                        DeepCleanStats.givenUp = troubled.size
+                        noteFailure(host)
                         throw e
                     }
                     uin = BufferedInputStream(upstream.getInputStream(), 1 shl 16)
@@ -446,7 +474,9 @@ class InterceptProxy(
             if (b < 0) return if (sb.isEmpty()) null else sb.toString()
             if (b == '\n'.code) break
             if (b != '\r'.code) sb.append(b.toChar())
-            if (sb.length > 8192) throw IOException("line too long")
+            // A news site's Content-Security-Policy or Set-Cookie routinely runs past 8 KB; the whole
+            // head is still bounded by MAX_HEAD, so one long line is no longer fatal to the page.
+            if (sb.length > MAX_HEAD) throw IOException("line too long")
         }
         return sb.toString()
     }
