@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The umbrella open: protection is up.
+<!-- The umbrella furled: protection is off or paused.
      Generated from the same dome geometry UmbrellaGlyph draws, so the icon and the
      animated glyph on the home card are the same umbrella. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -16,5 +16,5 @@
         android:pathData="M12,1.56 L12,18.24 A2.52,2.52 0 0 1 6.96,18.24" />
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M1.08,11.4 C1.08,6.88 5.23,3.6 12,3.6 C18.77,3.6 22.92,6.88 22.92,11.4 Q20.19,10.71 17.46,11.94 Q14.73,11.07 12,12.12 Q9.27,11.07 6.54,11.94 Q3.81,10.71 1.08,11.4 Z" />
+        android:pathData="M10.06,13.51 C10.06,7.76 10.8,3.6 12,3.6 C13.2,3.6 13.94,7.76 13.94,13.51 Q13.46,14.05 12.97,14.93 Q12.49,15 12,15.41 Q11.51,15 11.03,14.93 Q10.54,14.05 10.06,13.51 Z" />
 </vector>

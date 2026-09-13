@@ -584,6 +584,8 @@ class BlockerVpnService : VpnService() {
     }
 
     private fun broadcastState() {
+        // The status bar icon is part of the state, so refresh it whenever the state moves.
+        if (screenOn) runCatching { Notifications.updateRunning(this) }
         val i = Intent(ACTION_STATE_CHANGED).setPackage(packageName)
         i.putExtra(EXTRA_RUNNING, isRunning)
         i.putExtra(EXTRA_STATE, state)

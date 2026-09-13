@@ -4,8 +4,10 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
+import android.graphics.drawable.Icon
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import com.neurone.myblocker.R
 import com.neurone.myblocker.stats.StatsStore
 import com.neurone.myblocker.ui.MainActivity
 import com.neurone.myblocker.vpn.BlockerVpnService
@@ -47,6 +49,7 @@ class BlockerTileService : TileService() {
         val tile = qsTile ?: return
         val on = BlockerVpnService.isRunning
         tile.state = if (on) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        tile.icon = Icon.createWithResource(this, if (on) R.drawable.ic_umbrella else R.drawable.ic_umbrella_closed)
         tile.label = "Adbrella"
         tile.subtitle = when {
             on -> "${StatsStore.todayBlocked()} bounced today"

@@ -55,7 +55,9 @@ object Notifications {
             else -> "$today bounced today · ${StatsStore.totalBlocked} all time"
         }
         return Notification.Builder(context, CHANNEL_RUNNING)
-            .setSmallIcon(R.drawable.ic_umbrella)
+            // The status bar is the one place protection is visible all day, so the icon says which
+            // it is: the umbrella is open only while you are actually covered.
+            .setSmallIcon(if (BlockerVpnService.isRunning) R.drawable.ic_umbrella else R.drawable.ic_umbrella_closed)
             .setContentTitle(when { paused -> "Paused for Android Auto"; BlockerVpnService.isRunning || starting -> "Umbrella open"; else -> "Adbrella" })
             .setContentText(text)
             .setOngoing(true)
