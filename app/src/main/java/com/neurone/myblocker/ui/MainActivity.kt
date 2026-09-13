@@ -39,8 +39,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         InstallReceiver.foreground = true
-        // Picks up a certificate installed from Settings, or toggles, without a manual off/on.
-        Thread({ runCatching { com.neurone.myblocker.vpn.BlockerVpnService.reconcileDeepClean(this) } }, "reconcile").start()
     }
 
     override fun onPause() {
