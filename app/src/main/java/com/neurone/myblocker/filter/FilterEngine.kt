@@ -54,7 +54,6 @@ object FilterEngine {
         "samsungcloud.com", "samsungosp.com", "ospserver.net", "samsungcloudsolution.com",
         "account.samsung.com", "samsungapps.com", "smartthings.com", "samsungpay.com",
         "dns.quad9.net", "cloudflare-dns.com", "dns.google", "dns.adguard-dns.com",
-        "family.cloudflare-dns.com", "family.adguard-dns.com", "doh.cleanbrowsing.org",
         "raw.githubusercontent.com", "github.com", "objects.githubusercontent.com",
     )
 
